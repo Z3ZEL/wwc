@@ -1,0 +1,55 @@
+# Quality gate: the same checks as the README "Checks" section.
+# Runs on every push to master and on every pull request; mark both jobs as
+# required status checks in the master branch protection rule.
+name: Quality gate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Keep in sync with rust-toolchain.toml.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy (wasm)
+        run: cargo clippy -p frontend --target wasm32-unknown-unknown -- -D warnings
+      - name: Clippy (host lib + tests)
+        run: cargo clippy -p frontend --lib --tests -- -D warnings
+      - name: Test
+        run: cargo test -p frontend --lib
+
+  backend-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Dev-only superuser credentials; used by compose and rules.sh.
+      - name: Create .env
+        run: cp .env.example .env
+      - name: Start PocketBase
+        run: docker compose up -d --build --wait pocketbase
+      - name: API rule tests
+        run: backend/tests/rules.sh
+      - name: PocketBase logs
+        if: failure()
+        run: docker compose logs pocketbase
+      - name: Stop PocketBase
+        if: always()
+        run: docker compose down -v
