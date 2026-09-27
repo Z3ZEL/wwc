@@ -89,13 +89,13 @@ Hosts that deploy an existing image (e.g. Render's "Existing Image") can use thi
 
 The env vars below are applied last. Only sections whose variables are set are touched; the full list is in `.env.example`.
 
-| Variables | What |
-|---|---|
-| `PB_S3_ENABLED`, `PB_S3_BUCKET`, `PB_S3_REGION`, `PB_S3_ENDPOINT`, `PB_S3_ACCESS_KEY`, `PB_S3_SECRET`, `PB_S3_FORCE_PATH_STYLE` | Uploaded photos on S3 (or any S3-compatible storage) |
-| `PB_BACKUPS_CRON` (default `0 3 * * *`), `PB_BACKUPS_MAX_KEEP` (default 7), optional `PB_BACKUPS_S3_*` | Scheduled backups. They go to the `PB_S3_*` bucket (at its root) unless `PB_BACKUPS_S3_*` names another one. |
-| `PB_SMTP_ENABLED`, `PB_SMTP_HOST`, `PB_SMTP_PORT`, `PB_SMTP_USERNAME`, `PB_SMTP_PASSWORD`, `PB_SMTP_TLS`, `PB_SMTP_AUTH_METHOD`, `PB_SENDER_NAME`, `PB_SENDER_ADDRESS` | Outgoing mail: account confirmation, password reset |
-| `PB_APP_URL`, `PB_APP_NAME` | Public PocketBase URL (used in email links) and the name shown in emails |
-| `PB_TRUSTED_PROXY_HEADERS` | e.g. `X-Forwarded-For` behind a proxy, so client IPs and rate limits are right |
+| Variables                                                                                                                                                              | What                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `PB_S3_ENABLED`, `PB_S3_BUCKET`, `PB_S3_REGION`, `PB_S3_ENDPOINT`, `PB_S3_ACCESS_KEY`, `PB_S3_SECRET`, `PB_S3_FORCE_PATH_STYLE`                                        | Uploaded photos on S3 (or any S3-compatible storage)                                                         |
+| `PB_BACKUPS_CRON` (default `0 3 * * *`), `PB_BACKUPS_MAX_KEEP` (default 7), optional `PB_BACKUPS_S3_*`                                                                 | Scheduled backups. They go to the `PB_S3_*` bucket (at its root) unless `PB_BACKUPS_S3_*` names another one. |
+| `PB_SMTP_ENABLED`, `PB_SMTP_HOST`, `PB_SMTP_PORT`, `PB_SMTP_USERNAME`, `PB_SMTP_PASSWORD`, `PB_SMTP_TLS`, `PB_SMTP_AUTH_METHOD`, `PB_SENDER_NAME`, `PB_SENDER_ADDRESS` | Outgoing mail: account confirmation, password reset                                                          |
+| `PB_APP_URL`, `PB_APP_NAME`                                                                                                                                            | Public PocketBase URL (used in email links) and the name shown in emails                                     |
+| `PB_TRUSTED_PROXY_HEADERS`                                                                                                                                             | e.g. `X-Forwarded-For` behind a proxy, so client IPs and rate limits are right                               |
 
 Check the S3 and SMTP settings from the dashboard (Settings → Files storage / Backups / Mail settings, "Test connection"). Settings covered by the files or env vars are reset on the next restart, so change them in the repo, not the dashboard.
 

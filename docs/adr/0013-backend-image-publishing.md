@@ -3,11 +3,13 @@
 Status: accepted (2026-09-27)
 
 ## Context
+
 ADR 0012 made the backend a self-contained image, but it was built wherever it was deployed ("No CI
 publishing yet"). Every host needed the source and a Docker build, and nothing tied a running backend to a
 release.
 
 ## Decision
+
 - `.github/workflows/backend-image.yml` builds `backend/Dockerfile` and pushes it to the GitHub Container
   Registry as `ghcr.io/<owner>/wwc-backend` when a GitHub Release is published, or by hand
   (`workflow_dispatch`). Authentication is the workflow's `GITHUB_TOKEN`; no extra secrets.
@@ -22,6 +24,7 @@ release.
   environment. A full release triggers its deploy on the static host instead (ADR 0015).
 
 ## Consequences
+
 - Hosts pull a versioned image instead of building from source; rolling back = deploying the previous tag
   (only if no migration ran in between; migrations are forward-only).
 - The GHCR package is private on first publish: make it public in the package settings, or give the host a
