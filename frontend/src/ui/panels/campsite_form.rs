@@ -88,7 +88,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
     field_error(ui, theme, err, "tent_capacity");
 
     ui.add_space(theme.spacing.section_gap);
-    photos(ui, theme, f, editing, &state.origin, actions);
+    photos(ui, theme, f, editing, &state.api_base, actions);
 
     if changed {
         f.dirty = true;
@@ -119,13 +119,13 @@ fn photos(
     theme: &Theme,
     f: &CampsiteForm,
     campsite: Option<&Campsite>,
-    origin: &str,
+    api_base: &str,
     actions: &mut Vec<Action>,
 ) {
     section_title(ui, "Photos");
     let existing = f.existing_photos.iter().map(|file| Thumb {
         source: campsite
-            .and_then(|c| photo_url(origin, c, file, PhotoSize::Thumb))
+            .and_then(|c| photo_url(api_base, c, file, PhotoSize::Thumb))
             .map(|url| ImageSource::Uri(Cow::Owned(url))),
         label: file,
     });

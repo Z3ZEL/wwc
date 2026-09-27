@@ -148,6 +148,9 @@ impl Controller {
                 };
                 self.api.register(f.name.trim(), &email, &password, &f.confirm, done);
             }
+            Action::RequestVerification { email } => {
+                self.api.request_verification(&email, self.done(Event::VerificationRequested));
+            }
             Action::Logout => {
                 state.session = None;
                 state.toast(ToastKind::Info, "You are logged out.");

@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::actions::{Action, Event};
 use crate::api::ApiClient;
 use crate::api::models::Session;
+use crate::config;
 use crate::controller::Controller;
 use crate::map::MapView;
 use crate::seo::SeoTitles;
@@ -35,10 +36,15 @@ impl WwcApp {
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
         let (tx, events) = mpsc::channel();
-        // Empty base URL: same origin, /api is proxied to PocketBase.
-        let controller = Controller::new(ApiClient::new(""), tx, cc.egui_ctx.clone());
+        // Empty API URL: same origin, /api is proxied to PocketBase (dev).
+        let api_url = config::api_url();
+        let controller = Controller::new(ApiClient::new(api_url), tx, cc.egui_ctx.clone());
+        let api_base = match api_url {
+            "" => web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default(),
+            url => url.to_owned(),
+        };
         let state = AppState {
-            origin: web_sys::window().and_then(|w| w.location().origin().ok()).unwrap_or_default(),
+            api_base,
             session: cc.storage.and_then(|s| eframe::get_value::<Option<Session>>(s, SESSION_KEY)).flatten(),
             ..Default::default()
         };

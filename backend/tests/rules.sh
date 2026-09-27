@@ -32,10 +32,16 @@ expect() { # expect DESCRIPTION EXPECTED_STATUS ACTUAL_STATUS
   else FAIL=$((FAIL+1)); echo "  FAIL $1 (expected $2, got $3) $(head -c 300 "$BODYF")"; fi
 }
 
-new_user() { # new_user NAME -> "token id"
-  local email="$1-$RUN@example.com"
+req POST /api/collections/_superusers/auth-with-password "" \
+  "{\"identity\":\"$PB_ADMIN_EMAIL\",\"password\":\"$PB_ADMIN_PASSWORD\"}" >/dev/null
+SU=$(jq -r .token "$BODYF")
+
+new_user() { # new_user NAME [unverified] -> "token id". Verified (confirmed email) unless asked otherwise.
+  local email="$1-$RUN@example.com" id
   req POST /api/collections/users/records "" \
     "{\"email\":\"$email\",\"password\":\"password123\",\"passwordConfirm\":\"password123\",\"name\":\"$1\"}" >/dev/null
+  id=$(jq -r .id "$BODYF")
+  [ "${2:-}" = unverified ] || req PATCH "/api/collections/users/records/$id" "$SU" '{"verified":true}' >/dev/null
   req POST /api/collections/users/auth-with-password "" \
     "{\"identity\":\"$email\",\"password\":\"password123\"}" >/dev/null
   jq -r '"\(.token) \(.record.id)"' "$BODYF"
@@ -43,9 +49,7 @@ new_user() { # new_user NAME -> "token id"
 
 read -r A A_ID <<<"$(new_user owner)"
 read -r B B_ID <<<"$(new_user other)"
-req POST /api/collections/_superusers/auth-with-password "" \
-  "{\"identity\":\"$PB_ADMIN_EMAIL\",\"password\":\"$PB_ADMIN_PASSWORD\"}" >/dev/null
-SU=$(jq -r .token "$BODYF")
+read -r U U_ID <<<"$(new_user unverified unverified)"
 read -r M M_ID <<<"$(new_user moderator)"
 req PATCH "/api/collections/users/records/$M_ID" "$SU" '{"role":"admin"}' >/dev/null
 req POST /api/collections/users/auth-refresh "$M" >/dev/null   # token now carries the admin role
@@ -57,6 +61,7 @@ echo "users"
 expect "signup cannot set role"            400 "$(req POST /api/collections/users/records "" "{\"email\":\"x-$RUN@example.com\",\"password\":\"password123\",\"passwordConfirm\":\"password123\",\"role\":\"admin\"}")"
 expect "user cannot promote themselves"    404 "$(req PATCH "/api/collections/users/records/$A_ID" "$A" '{"role":"admin"}')"
 expect "user can edit own name"            200 "$(req PATCH "/api/collections/users/records/$A_ID" "$A" '{"name":"Owner"}')"
+expect "user cannot verify themselves"     400 "$(req PATCH "/api/collections/users/records/$U_ID" "$U" '{"verified":true}')"
 expect "user cannot edit another user"     404 "$(req PATCH "/api/collections/users/records/$B_ID" "$A" '{"name":"x"}')"
 expect "anonymous can view a profile"      200 "$(req GET "/api/collections/users/records/$A_ID" "")"
 [ "$(jq -r '.email // ""' "$BODYF")" = "" ]; expect "profile does not expose email" 0 "$?"
@@ -65,6 +70,7 @@ echo "campsites"
 expect "anonymous cannot create"           400 "$(req POST /api/collections/campsites/records "" "$SITE")"
 expect "cannot create as someone else"     400 "$(req POST /api/collections/campsites/records "$B" "$SITE")"
 expect "cannot create a hidden campsite"   400 "$(req POST /api/collections/campsites/records "$A" "${SITE%\}},\"hidden\":true}")"
+expect "unverified user cannot create"     400 "$(req POST /api/collections/campsites/records "$U" "${SITE/$A_ID/$U_ID}")"
 expect "owner can create"                  200 "$(req POST /api/collections/campsites/records "$A" "$SITE")"
 CID=$(jq -r .id "$BODYF")
 expect "anonymous can list"                200 "$(req GET "/api/collections/campsites/records?perPage=1" "")"
@@ -79,6 +85,7 @@ expect "admin cannot edit content"         403 "$(req PATCH "/api/collections/ca
 echo "ratings"
 expect "cannot rate own campsite"          400 "$(req POST /api/collections/ratings/records "$A" "{\"campsite\":\"$CID\",\"author\":\"$A_ID\",\"score\":5}")"
 expect "anonymous cannot rate"             400 "$(req POST /api/collections/ratings/records "" "{\"campsite\":\"$CID\",\"author\":\"$B_ID\",\"score\":5}")"
+expect "unverified user cannot rate"       400 "$(req POST /api/collections/ratings/records "$U" "{\"campsite\":\"$CID\",\"author\":\"$U_ID\",\"score\":4}")"
 expect "other user can rate"               200 "$(req POST /api/collections/ratings/records "$B" "{\"campsite\":\"$CID\",\"author\":\"$B_ID\",\"score\":4}")"
 RID=$(jq -r .id "$BODYF")
 expect "second rating rejected"            400 "$(req POST /api/collections/ratings/records "$B" "{\"campsite\":\"$CID\",\"author\":\"$B_ID\",\"score\":2}")"
@@ -90,6 +97,7 @@ expect "stats view is public"              200 "$(req GET "/api/collections/camp
 
 echo "comments"
 expect "cannot comment on own campsite"    400 "$(req POST /api/collections/comments/records "$A" "{\"campsite\":\"$CID\",\"author\":\"$A_ID\",\"body\":\"mine\"}")"
+expect "unverified user cannot comment"    400 "$(req POST /api/collections/comments/records "$U" "{\"campsite\":\"$CID\",\"author\":\"$U_ID\",\"body\":\"Hi\"}")"
 expect "other user can comment"            200 "$(req POST /api/collections/comments/records "$B" "{\"campsite\":\"$CID\",\"author\":\"$B_ID\",\"body\":\"Nice\"}")"
 KID=$(jq -r .id "$BODYF")
 expect "author cannot hide own comment"    404 "$(req PATCH "/api/collections/comments/records/$KID" "$B" '{"hidden":true}')"
@@ -106,6 +114,7 @@ K1=$(jq -r .id "$BODYF")
 req POST /api/collections/comments/records "$M" "{\"campsite\":\"$CID\",\"author\":\"$M_ID\",\"body\":\"Second\"}" >/dev/null
 K2=$(jq -r .id "$BODYF")
 expect "anonymous cannot report"           400 "$(req POST "$R" "" "{\"reporter\":\"$B_ID\",\"campsite\":\"$CID\",\"reason\":\"spam\"}")"
+expect "unverified user cannot report"     400 "$(req POST "$R" "$U" "{\"reporter\":\"$U_ID\",\"campsite\":\"$CID\",\"reason\":\"spam\"}")"
 expect "cannot report as someone else"     400 "$(req POST "$R" "$B" "{\"reporter\":\"$A_ID\",\"campsite\":\"$CID\",\"reason\":\"spam\"}")"
 expect "cannot set status on create"       400 "$(req POST "$R" "$B" "{\"reporter\":\"$B_ID\",\"campsite\":\"$CID\",\"reason\":\"spam\",\"status\":\"resolved\"}")"
 expect "user can report a campsite"        200 "$(req POST "$R" "$B" "{\"reporter\":\"$B_ID\",\"campsite\":\"$CID\",\"reason\":\"wrong_location\",\"details\":\"Wrong valley\"}")"

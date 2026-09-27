@@ -3,7 +3,11 @@
 Source of truth: [`backend/pb_migrations/`](../backend/pb_migrations) (schema and rules) and [`backend/pb_hooks/`](../backend/pb_hooks). Permission tests: [`backend/tests/rules.sh`](../backend/tests/rules.sh).
 The frontend calls these endpoints only from `frontend/src/api/client.rs`.
 
-Shorthands: `AUTH` = `@request.auth.id != ""`, `ADMIN` = `@request.auth.role = "admin"`, `""` = public, `null` = superuser only.
+Shorthands: `AUTH` = `@request.auth.id != ""`, `VERIFIED` = `@request.auth.verified = true` (email confirmed, ADR 0012), `ADMIN` = `@request.auth.role = "admin"`, `""` = public, `null` = superuser only.
+
+Every **create** rule on user content (campsites, ratings, comments, reports) starts with `VERIFIED &&`: an unconfirmed account can browse and edit its profile, but can't post. Updates and deletes don't require it.
+
+In production, CORS only allows the frontend origin(s) in `PB_ORIGINS` (ADR 0012).
 
 ## users (built-in auth collection)
 
@@ -12,6 +16,7 @@ Shorthands: `AUTH` = `@request.auth.id != ""`, `ADMIN` = `@request.auth.role = "
 | `name` | text | public display name |
 | `avatar` | file | built-in, not used by the frontend yet |
 | `role` | select `user` / `admin` | empty means `user`. Only a superuser can change it (dashboard). |
+| `verified` | bool, built-in | set by the confirmation-email link. Only a superuser can change it otherwise. |
 
 | Rule | Value |
 |---|---|
@@ -43,7 +48,7 @@ Rules: list/view `""`; create/update/delete `null` (managed in the dashboard). T
 | Rule | Value |
 |---|---|
 | list / view | `hidden = false \|\| author = @request.auth.id \|\| ADMIN` |
-| create | `AUTH && @request.body.author = @request.auth.id && @request.body.hidden:isset = false` |
+| create | `VERIFIED && AUTH && @request.body.author = @request.auth.id && @request.body.hidden:isset = false` |
 | update | `(author = @request.auth.id && @request.body.author:isset = false && @request.body.hidden:isset = false) \|\| ADMIN` (hook: admins may only change `hidden`) |
 | delete | `author = @request.auth.id \|\| ADMIN` |
 
@@ -63,7 +68,7 @@ never loads originals. See ADR 0010.
 | Rule | Value |
 |---|---|
 | list / view | `""` |
-| create | `AUTH && @request.body.author = @request.auth.id && @request.body.campsite.author != @request.auth.id` |
+| create | `VERIFIED && AUTH && @request.body.author = @request.auth.id && @request.body.campsite.author != @request.auth.id` |
 | update | `author = @request.auth.id && @request.body.author:isset = false && @request.body.campsite:isset = false` |
 | delete | `author = @request.auth.id` |
 
@@ -74,7 +79,7 @@ never loads originals. See ADR 0010.
 | Rule | Value |
 |---|---|
 | list / view | `hidden = false \|\| author = @request.auth.id \|\| ADMIN` |
-| create | `AUTH && @request.body.author = @request.auth.id && @request.body.campsite.author != @request.auth.id && @request.body.hidden:isset = false` |
+| create | `VERIFIED && AUTH && @request.body.author = @request.auth.id && @request.body.campsite.author != @request.auth.id && @request.body.hidden:isset = false` |
 | update | `(author = @request.auth.id && …author/campsite/hidden not set) \|\| ADMIN` (hook: admins may only change `hidden`) |
 | delete | `author = @request.auth.id \|\| ADMIN` |
 
@@ -95,7 +100,7 @@ A logged-in user flags a campsite or a comment for admin review. Admins read and
 | Rule | Value |
 |---|---|
 | list / view | `reporter = @request.auth.id \|\| ADMIN` |
-| create | `AUTH && @request.body.reporter = @request.auth.id && @request.body.status:isset = false` |
+| create | `VERIFIED && AUTH && @request.body.reporter = @request.auth.id && @request.body.status:isset = false` |
 | update | `ADMIN` |
 | delete | `ADMIN` |
 
@@ -111,6 +116,7 @@ One row per visible campsite, with the same `id` as the campsite: `avg_score` (0
 |---|---|
 | `own_campsite.pb.js` | Rejects a rating or comment on your own campsite (backup for the create rules). |
 | `reports.pb.js` | On report create: exactly one target, no `wrong_location` on a comment, not your own content, no duplicate ("You already reported this."), and `status = open`. |
+| `settings.pb.js` | On boot, applies instance settings: `backend/pb_settings.json` (rate limits: auth 2 req/3 s, create 20/5 s, API 300/10 s per IP; batch API off; off in dev), optional `PB_SETTINGS_FILE`, then env vars for S3, backups, SMTP, app URL, trusted proxy headers (`.env.example`, ADR 0012). |
 | `moderation.pb.js` | When an admin who isn't the author updates a campsite or comment, only `hidden` may change (this also blocks photo uploads and removals). |
 
 ## Requests the frontend makes
@@ -131,6 +137,7 @@ GET    /api/collections/tags/records?filter=active = true&sort=sort_order,label&
 POST   /api/collections/users/auth-with-password   {identity, password}
 POST   /api/collections/users/auth-refresh
 POST   /api/collections/users/records               {name, email, password, passwordConfirm}
+POST   /api/collections/users/request-verification  {email}          (after register, and "Resend email")
 PATCH  /api/collections/users/records/:id           {name} | {oldPassword, password, passwordConfirm}
 POST   /api/collections/campsites/records?expand=author,tags   {title, description, lat, lng, tags, tent_capacity, author}
 PATCH  /api/collections/campsites/records/:id?expand=author,tags   (same, without author; + "photos-": [filenames])

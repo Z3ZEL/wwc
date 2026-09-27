@@ -39,6 +39,8 @@ for u in "${USERS[@]}"; do
     auth=$(login "$email" "$PASSWORD")
   fi
   read -r TOKEN[$u] ID[$u] <<<"$auth"
+  # Seed users skip the confirmation email: posting requires a verified email (ADR 0012).
+  api PATCH "/api/collections/users/records/${ID[$u]}" "$ADMIN_TOKEN" '{"verified":true}' >/dev/null
   echo "user $email ($PASSWORD) id=${ID[$u]}"
 done
 

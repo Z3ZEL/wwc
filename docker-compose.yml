@@ -1,18 +1,30 @@
-# Development stack only. `docker compose up` → app on http://localhost:8080
+# Development stack only (production: README "Production"). `docker compose up` → app on http://localhost:8080
 services:
   pocketbase:
     build: ./backend
     env_file: .env
+    environment:
+      PB_DEV: "1" # --automigrate
     ports:
       - "8090:8090"
     volumes:
       - pb_data:/pb_data
       - ./backend/pb_migrations:/pb_migrations
       - ./backend/pb_hooks:/pb_hooks
+      - ./backend/pb_settings.json:/pb_settings.json:ro
+      - ./backend/pb_settings.dev.json:/pb_settings.dev.json:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
       interval: 5s
       retries: 20
+    depends_on:
+      - mailpit
+
+  # Catches every email PocketBase sends (confirmation links): UI on http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"
 
   frontend:
     build:

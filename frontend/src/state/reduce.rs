@@ -109,13 +109,18 @@ pub fn apply(state: &mut AppState, event: Event) -> Vec<Action> {
             match result {
                 Ok(_) => {
                     state.register = Default::default();
-                    state.login.email = email;
+                    state.login.email = email.clone();
                     state.login.password = password;
-                    return vec![Action::Login];
+                    return vec![Action::Login, Action::RequestVerification { email }];
                 }
                 Err(e) => state.register.error = Some(e),
             }
         }
+
+        Event::VerificationRequested(result) => match result {
+            Ok(()) => state.toast(ToastKind::Info, "We sent you a confirmation email. Open its link to start posting."),
+            Err(e) => state.toast(ToastKind::Error, format!("Couldn't send the confirmation email: {e}")),
+        },
 
         Event::ProfileNameSaved(result) => {
             state.profile.saving_name = false;
@@ -322,7 +327,13 @@ mod tests {
     use crate::state::CampsiteDetail;
 
     fn user() -> User {
-        User { id: "u1".into(), name: "Alice".into(), email: "a@example.com".into(), role: String::new() }
+        User {
+            id: "u1".into(),
+            name: "Alice".into(),
+            email: "a@example.com".into(),
+            role: String::new(),
+            verified: true,
+        }
     }
 
     fn logged_in() -> AppState {
@@ -400,8 +411,29 @@ mod tests {
             &mut s,
             Event::Registered { email: "a@example.com".into(), password: "pw".into(), result: Ok(user()) },
         );
-        assert_eq!(follow, vec![Action::Login]);
+        assert_eq!(follow, vec![Action::Login, Action::RequestVerification { email: "a@example.com".into() }]);
         assert_eq!(s.login.email, "a@example.com");
+    }
+
+    #[test]
+    fn verification_request_result_is_a_toast() {
+        let mut s = logged_in();
+        apply(&mut s, Event::VerificationRequested(Ok(())));
+        apply(&mut s, Event::VerificationRequested(Err(ApiError::network("offline"))));
+        let kinds: Vec<_> = s.toasts.iter().map(|t| t.kind).collect();
+        assert_eq!(kinds, vec![ToastKind::Info, ToastKind::Error]);
+        assert!(s.session.is_some(), "a failed email request doesn't log out");
+    }
+
+    #[test]
+    fn needs_verification_only_when_logged_in_and_unconfirmed() {
+        let mut s = logged_in();
+        assert!(!s.needs_verification());
+        if let Some(session) = &mut s.session {
+            session.user.verified = false;
+        }
+        assert!(s.needs_verification());
+        assert!(!AppState::default().needs_verification());
     }
 
     #[test]

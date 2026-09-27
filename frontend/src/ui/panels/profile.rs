@@ -3,11 +3,14 @@ use egui::Ui;
 use crate::actions::Action;
 use crate::state::AppState;
 use crate::ui::theme::Theme;
-use crate::ui::widgets::{field_error, form_error, muted, primary_button, section_title, text_field};
+use crate::ui::widgets::{field_error, form_error, muted, primary_button, section_title, text_field, verify_prompt};
 
 pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
     let Some(session) = &state.session else { return };
     muted(ui, theme, format!("Signed in as {}", session.user.email));
+    if !session.user.verified {
+        verify_prompt(ui, theme, &session.user.email, "to post, rate and comment.", actions);
+    }
     ui.add_space(theme.spacing.section_gap);
 
     let f = &mut state.profile;
