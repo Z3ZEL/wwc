@@ -17,8 +17,12 @@ use crate::ui::theme::Theme;
 use crate::ui::widgets::{danger_button, panel_frame, verify_prompt};
 
 pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
-    let Some(panel) = state.panel.clone() else { return };
-    panel_frame(ui, theme, panel.title(), state.panel_collapsed, actions, |ui, actions| {
+    let Some(panel) = state.panel.clone() else {
+        // Still called with no panel, so the last one can slide out.
+        panel_frame(ui, theme, None, false, actions, |_, _| {});
+        return;
+    };
+    panel_frame(ui, theme, Some(panel.title()), state.panel_collapsed, actions, |ui, actions| {
         if state.confirm_discard.is_some() {
             discard_prompt(ui, theme, actions);
             return;

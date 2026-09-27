@@ -10,15 +10,16 @@
 
 A campsite-sharing web app built around an **interactive map**.
 
-| Actor | Can do |
-|---|---|
-| **Anonymous visitor** | Browse the map, see every campsite, open details, read ratings and comments |
-| **Authenticated user** | Everything above, plus: create campsites, edit/delete *their own* campsites (owner-only, never other people's), rate a campsite (once per campsite, editable), comment, delete their own comments, **report** a campsite, comment or user. Users **cannot rate or comment on their own campsites**. |
-| **Admin** | A user with `role = "admin"`. Uses a **minimal in-app moderation screen** (report queue, hide/restore content). Everything else (tags, users, raw data) goes through the PocketBase dashboard (`/_/`) for now. |
+| Actor                  | Can do                                                                                                                                                                                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Anonymous visitor**  | Browse the map, see every campsite, open details, read ratings and comments                                                                                                                                                                                                                         |
+| **Authenticated user** | Everything above, plus: create campsites, edit/delete _their own_ campsites (owner-only, never other people's), rate a campsite (once per campsite, editable), comment, delete their own comments, **report** a campsite, comment or user. Users **cannot rate or comment on their own campsites**. |
+| **Admin**              | A user with `role = "admin"`. Uses a **minimal in-app moderation screen** (report queue, hide/restore content). Everything else (tags, users, raw data) goes through the PocketBase dashboard (`/_/`) for now.                                                                                      |
 
 Core domain objects: **User**, **Campsite**, **Tag**, **Rating**, **Comment**, **Report**, **Photo** (a file field on Campsite).
 
 Product decisions (v0.2):
+
 - Exact campsite locations are **public**, including for anonymous visitors.
 - Campsite editing is **owner-only**; there is no wiki-style editing.
 - You can't rate or comment on your own campsite.
@@ -28,16 +29,16 @@ Product decisions (v0.2):
 
 ## 2. Stack at a glance
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Frontend | **Rust + egui/eframe**, compiled to **WebAssembly** (`wasm32-unknown-unknown`) | **Web only.** No native desktop target is supported or tested. |
-| Frontend build | **Trunk** | Dev server, asset pipeline, dev proxy to the backend, `wasm-opt` in release |
-| Map widget | **`walkers`** crate (egui slippy map) | OpenStreetMap raster tiles in dev |
-| HTTP (wasm) | **`ehttp`** (callback based, no async runtime) | One API client module, see §5.4 |
-| Backend | **PocketBase** (single binary, SQLite) | Auth, REST API, file storage, access rules, admin UI |
-| Backend logic | PocketBase **JS migrations** (`pb_migrations/`) and **JS hooks** (`pb_hooks/`) | No custom Go build unless an ADR justifies it |
-| Dev environment | **docker compose** | Development only (§7) |
-| Production | Static bundle + PocketBase container | Frontend on any static host, PocketBase image with a `/pb_data` volume, files and backups on S3 (§7.1, ADR 0012) |
+| Layer           | Choice                                                                         | Notes                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Frontend        | **Rust + egui/eframe**, compiled to **WebAssembly** (`wasm32-unknown-unknown`) | **Web only.** No native desktop target is supported or tested.                                                   |
+| Frontend build  | **Trunk**                                                                      | Dev server, asset pipeline, dev proxy to the backend, `wasm-opt` in release                                      |
+| Map widget      | **`walkers`** crate (egui slippy map)                                          | OpenStreetMap raster tiles in dev                                                                                |
+| HTTP (wasm)     | **`ehttp`** (callback based, no async runtime)                                 | One API client module, see §5.4                                                                                  |
+| Backend         | **PocketBase** (single binary, SQLite)                                         | Auth, REST API, file storage, access rules, admin UI                                                             |
+| Backend logic   | PocketBase **JS migrations** (`pb_migrations/`) and **JS hooks** (`pb_hooks/`) | No custom Go build unless an ADR justifies it                                                                    |
+| Dev environment | **docker compose**                                                             | Development only (§7)                                                                                            |
+| Production      | Static bundle + PocketBase container                                           | Frontend on any static host, PocketBase image with a `/pb_data` volume, files and backups on S3 (§7.1, ADR 0012) |
 
 ```
 ┌───────────────────────────── Browser ─────────────────────────────┐
@@ -76,9 +77,11 @@ wwc/
 ├── frontend/
 │   ├── Cargo.toml             # eframe/walkers are wasm-only deps; the rest also builds on the host
 │   ├── Dockerfile.dev         # rust + trunk image for docker compose
-│   ├── Trunk.toml             # Build config (the /api proxy comes from TRUNK_SERVE_PROXY_* env vars)
-│   ├── index.html
+│   ├── Trunk.toml             # Build config (the /api proxy comes from TRUNK_SERVE_PROXY_* env vars) + seo-gen hook
+│   ├── index.html             # Page shell with SEO markers, filled by tools/seo-gen
 │   ├── assets/theme.json      # ALL colors, fonts, sizes, spacing — see §5.7
+│   ├── assets/seo.json        # ALL SEO text and settings — see §5.10
+│   ├── assets/seo/            # favicon.svg, og-image.svg/.png (social preview)
 │   ├── tests/fixtures/        # Recorded PocketBase JSON for DTO tests
 │   └── src/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
@@ -91,12 +94,14 @@ wwc/
 │       ├── api/               # PocketBase client, DTOs, errors (the only HTTP code)
 │       ├── map/               # view.rs: walkers map, markers, draft pin, viewport → bbox (wasm only)
 │       │                      # cluster.rs: pure screen-space marker clustering (host-tested)
-│       ├── web/               # browser APIs egui lacks (photo file picker), wasm only
+│       ├── seo.rs             # browser tab title from seo.json
+│       ├── web/               # browser APIs egui lacks (photo file picker, document title), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters
 │           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider
+├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
 ├── backend/
 │   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
 │   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
@@ -112,6 +117,7 @@ wwc/
 ```
 
 Rules:
+
 - `pb_data/` is **never** committed (add to `.gitignore`); it lives in a docker volume.
 - Add a `fonts/` or `icons/` folder under `frontend/assets/` when the first custom font or icon is needed.
 - API DTOs live in `frontend/src/api/models.rs`. If a second Rust consumer appears (e.g. a CLI/seed tool), extract them into a `crates/api-types` crate — not before.
@@ -130,64 +136,70 @@ Rules:
 ### 4.2 Data model
 
 **`users`** (built-in auth collection)
-| Field | Type | Notes |
-|---|---|---|
-| `username` / `name` | text | Public display name |
-| `avatar` | file | optional, image, size-limited |
-| `role` | select: `user`, `admin` | default `user`. **Users can never change it themselves** (see §4.3). Admins are promoted from the PocketBase dashboard. |
-| email, password, verified | built-in | Email is **not** publicly visible |
+
+| Field                     | Type                    | Notes                                                                                                                   |
+| ------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `username` / `name`       | text                    | Public display name                                                                                                     |
+| `avatar`                  | file                    | optional, image, size-limited                                                                                           |
+| `role`                    | select: `user`, `admin` | default `user`. **Users can never change it themselves** (see §4.3). Admins are promoted from the PocketBase dashboard. |
+| email, password, verified | built-in                | Email is **not** publicly visible                                                                                       |
 
 **`campsites`**
-| Field | Type | Notes |
-|---|---|---|
-| `title` | text | required, 3–100 chars |
-| `description` | editor/text | max length enforced |
-| `lat`, `lng` | number | two plain number fields (simpler bbox filters and indexes than `geoPoint`). Not `required`: PocketBase treats 0 as empty. |
-| `photos` | file (multiple) | at most **3**, JPEG/PNG/WebP, 10 MB each, thumbs `320x240` + `1200x1200f`, not protected (ADR 0010). Owner-only, like every other campsite field. |
-| `tags` | relation (multiple) → tags | e.g. safe water, river, flat |
-| `tent_capacity` | number | required, integer **1–10**, where **10 means "10+"**. The UI always shows `10` as `10+`. |
-| `hidden` | bool | default false; set by admins only (moderation) |
-| `author` | relation → users | required, set from auth (see rules) |
-| `created` / `updated` | autodate | |
+
+| Field                 | Type                       | Notes                                                                                                                                             |
+| --------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`               | text                       | required, 3–100 chars                                                                                                                             |
+| `description`         | editor/text                | max length enforced                                                                                                                               |
+| `lat`, `lng`          | number                     | two plain number fields (simpler bbox filters and indexes than `geoPoint`). Not `required`: PocketBase treats 0 as empty.                         |
+| `photos`              | file (multiple)            | at most **3**, JPEG/PNG/WebP, 10 MB each, thumbs `320x240` + `1200x1200f`, not protected (ADR 0010). Owner-only, like every other campsite field. |
+| `tags`                | relation (multiple) → tags | e.g. safe water, river, flat                                                                                                                      |
+| `tent_capacity`       | number                     | required, integer **1–10**, where **10 means "10+"**. The UI always shows `10` as `10+`.                                                          |
+| `hidden`              | bool                       | default false; set by admins only (moderation)                                                                                                    |
+| `author`              | relation → users           | required, set from auth (see rules)                                                                                                               |
+| `created` / `updated` | autodate                   |                                                                                                                                                   |
 
 > Campsite properties will change. **New "yes/no" properties become tags** (a data change, not a migration). Add a dedicated field only for values that are numeric, ranged, or have to be validated (like `tent_capacity`).
 
 **`tags`** (admin-managed lookup table)
-| Field | Type | Notes |
-|---|---|---|
-| `slug` | text | unique, stable identifier used in code/filters, e.g. `safe_water`, `river`, `flat` |
-| `label` | text | display name |
-| `icon` | text | optional icon key for the frontend |
-| `sort_order` | number | display order |
-| `active` | bool | inactive tags are hidden from the picker but kept on existing campsites |
+
+| Field        | Type   | Notes                                                                              |
+| ------------ | ------ | ---------------------------------------------------------------------------------- |
+| `slug`       | text   | unique, stable identifier used in code/filters, e.g. `safe_water`, `river`, `flat` |
+| `label`      | text   | display name                                                                       |
+| `icon`       | text   | optional icon key for the frontend                                                 |
+| `sort_order` | number | display order                                                                      |
+| `active`     | bool   | inactive tags are hidden from the picker but kept on existing campsites            |
 
 Initial tags come from a migration: `safe_water` (Safe water), `river` (River), `flat` (Flat ground). The frontend **must not hard-code the tag list**. It loads tags from the API at startup.
 
 **`ratings`**
-| Field | Type | Notes |
-|---|---|---|
-| `campsite` | relation → campsites | required, cascade delete |
-| `author` | relation → users | required |
-| `score` | number | integer 1–5 |
+
+| Field            | Type                   | Notes                                                |
+| ---------------- | ---------------------- | ---------------------------------------------------- |
+| `campsite`       | relation → campsites   | required, cascade delete                             |
+| `author`         | relation → users       | required                                             |
+| `score`          | number                 | integer 1–5                                          |
 | **unique index** | (`campsite`, `author`) | one rating per user per campsite; re-rating = update |
 
 **`comments`**
-| Field | Type | Notes |
-|---|---|---|
-| `campsite` | relation → campsites | required, cascade delete |
-| `author` | relation → users | required |
-| `body` | text | required, 1–2000 chars |
-| `hidden` | bool | default false; admins only |
+
+| Field      | Type                 | Notes                      |
+| ---------- | -------------------- | -------------------------- |
+| `campsite` | relation → campsites | required, cascade delete   |
+| `author`   | relation → users     | required                   |
+| `body`     | text                 | required, 1–2000 chars     |
+| `hidden`   | bool                 | default false; admins only |
 
 **`reports`**
-| Field | Type | Notes |
-|---|---|---|
-| `reporter` | relation → users | required, = auth user |
-| `campsite` / `comment` | relation (single, optional each) | **exactly one** must be set, enforced by a hook (§4.5). A `user` target (report a person) is deferred. |
-| `reason` | select | `spam`, `inappropriate`, `wrong_location` (campsites only), `dangerous`, `other` |
-| `details` | text | optional, max 1000 chars |
-| `status` | select | `open` (set by the hook on create), `resolved`, `dismissed`. Only admins can change it. |
-| **unique indexes** | (`reporter`, `campsite`), (`reporter`, `comment`), both partial (`WHERE target != ''`) | one report per user per target |
+
+| Field                  | Type                                                                                   | Notes                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `reporter`             | relation → users                                                                       | required, = auth user                                                                                  |
+| `campsite` / `comment` | relation (single, optional each)                                                       | **exactly one** must be set, enforced by a hook (§4.5). A `user` target (report a person) is deferred. |
+| `reason`               | select                                                                                 | `spam`, `inappropriate`, `wrong_location` (campsites only), `dangerous`, `other`                       |
+| `details`              | text                                                                                   | optional, max 1000 chars                                                                               |
+| `status`               | select                                                                                 | `open` (set by the hook on create), `resolved`, `dismissed`. Only admins can change it.                |
+| **unique indexes**     | (`reporter`, `campsite`), (`reporter`, `comment`), both partial (`WHERE target != ''`) | one report per user per target                                                                         |
 
 `resolved_by` (who acted) is deferred to the moderation panel: for now admins resolve reports in the dashboard as a superuser, which isn't a `users` record.
 
@@ -197,20 +209,21 @@ Aggregates per campsite: `avg_score`, `rating_count`, `comment_count`. The front
 ### 4.3 API rules (the security contract)
 
 Shorthands used below (write them out in full in the real rules):
+
 - `AUTH` = `@request.auth.id != ""`
 - `ADMIN` = `@request.auth.role = "admin"`
 - `NOT_OWN_SITE` = `@request.body.campsite.author != @request.auth.id`
 - `VERIFIED` = `@request.auth.verified = true` — prefixes every create rule on `campsites`, `ratings`, `comments` and `reports` (§4.6); left out of the table for brevity.
 
-| Collection | list / view | create | update | delete |
-|---|---|---|---|---|
-| `campsites` | `hidden = false \|\| author = @request.auth.id \|\| ADMIN` | `AUTH && @request.body.author = @request.auth.id && @request.body.hidden:isset = false` | `author = @request.auth.id && @request.body.author:isset = false && @request.body.hidden:isset = false` **or** `ADMIN` (admin may only toggle `hidden`, enforced by hook) | `author = @request.auth.id \|\| ADMIN` |
-| `tags` | `""` | `null` (dashboard only) | `null` | `null` |
-| `ratings` | `""` | `AUTH && @request.body.author = @request.auth.id && NOT_OWN_SITE` | `author = @request.auth.id` (can't change `campsite`/`author`) | `author = @request.auth.id` |
-| `comments` | `hidden = false \|\| author = @request.auth.id \|\| ADMIN` | `AUTH && @request.body.author = @request.auth.id && NOT_OWN_SITE` | `author = @request.auth.id` (body only) | `author = @request.auth.id \|\| ADMIN` |
-| `reports` | `reporter = @request.auth.id \|\| ADMIN` | `AUTH && @request.body.reporter = @request.auth.id && @request.body.status:isset = false` | `ADMIN` | `ADMIN` |
-| `campsite_stats` | `""` (exclude hidden campsites in the view SQL) | — | — | — |
-| `users` | view limited to public fields | public signup, `@request.body.role:isset = false` | self only, `@request.body.role:isset = false` | self only |
+| Collection       | list / view                                                | create                                                                                    | update                                                                                                                                                                    | delete                                 |
+| ---------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `campsites`      | `hidden = false \|\| author = @request.auth.id \|\| ADMIN` | `AUTH && @request.body.author = @request.auth.id && @request.body.hidden:isset = false`   | `author = @request.auth.id && @request.body.author:isset = false && @request.body.hidden:isset = false` **or** `ADMIN` (admin may only toggle `hidden`, enforced by hook) | `author = @request.auth.id \|\| ADMIN` |
+| `tags`           | `""`                                                       | `null` (dashboard only)                                                                   | `null`                                                                                                                                                                    | `null`                                 |
+| `ratings`        | `""`                                                       | `AUTH && @request.body.author = @request.auth.id && NOT_OWN_SITE`                         | `author = @request.auth.id` (can't change `campsite`/`author`)                                                                                                            | `author = @request.auth.id`            |
+| `comments`       | `hidden = false \|\| author = @request.auth.id \|\| ADMIN` | `AUTH && @request.body.author = @request.auth.id && NOT_OWN_SITE`                         | `author = @request.auth.id` (body only)                                                                                                                                   | `author = @request.auth.id \|\| ADMIN` |
+| `reports`        | `reporter = @request.auth.id \|\| ADMIN`                   | `AUTH && @request.body.reporter = @request.auth.id && @request.body.status:isset = false` | `ADMIN`                                                                                                                                                                   | `ADMIN`                                |
+| `campsite_stats` | `""` (exclude hidden campsites in the view SQL)            | —                                                                                         | —                                                                                                                                                                         | —                                      |
+| `users`          | view limited to public fields                              | public signup, `@request.body.role:isset = false`                                         | self only, `@request.body.role:isset = false`                                                                                                                             | self only                              |
 
 - `null` rule = superuser only. Empty string `""` = everyone. Be explicit — never leave a rule accidentally `""`.
 - **Never let a user set their own `role`, `hidden`, or `status`.** Each of these is guarded by a rule and a rule test.
@@ -236,7 +249,7 @@ Shorthands used below (write them out in full in the real rules):
 - Admin updates on `campsites`/`comments` can only change `hidden`. An admin never edits another user's content.
 - Content sanitation / profanity or spam checks on comments.
 - Custom read-only endpoints if a query can't be expressed via the REST API (e.g. "nearby campsites").
-Keep hooks small, one concern per file, and documented in `docs/API.md`.
+  Keep hooks small, one concern per file, and documented in `docs/API.md`.
 
 ### 4.6 Auth
 
@@ -271,6 +284,7 @@ Keep hooks small, one concern per file, and documented in `docs/API.md`.
 ```
 
 Rules:
+
 - **UI functions never call the API directly.** They read `AppState` and push `Action`s. The one exception: egui text inputs need `&mut String`, so panels get `&mut AppState` and may edit **form input buffers** (and small view toggles like "confirm delete"). Anything else goes through an `Action`.
 - **All API results come back as `Event`s** through a single `std::sync::mpsc` receiver drained at the start of every frame. `ehttp` callbacks send the event, then call `ctx.request_repaint()` (see `Controller::done`).
 - **Exception — images:** `egui::Image::new(url)` fetches campsite photos itself, through the `egui_extras` loaders installed in `app.rs`, the same way walkers fetches tiles. It's read-only and cached, and it never touches `AppState`. UI code only builds the URL with `api::photo_url` (ADR 0010).
@@ -308,8 +322,9 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 - Markers are painted in the `Map::show` closure (`map/view.rs`); clicking one emits `Action::OpenPanel(Panel::Campsite(id))`. Markers are colored by state: normal, your own, selected.
 - **Clustering** (`map/cluster.rs`): below `map.cluster_max_zoom`, markers closer than `map.cluster_distance` points on screen are drawn as one circle with a count (radius `cluster_radius`…`cluster_radius_max`). Clicking a cluster centers on it and zooms in by `cluster_zoom_step`. The selected campsite is always drawn alone. The grouping only uses relative screen positions, so panning doesn't change it.
 - `AppState.map_focus`: set by `Action::FocusCampsite` (a search result click). The map takes it on its next frame, centers there and zooms in to at least `map.focus_zoom`.
+- Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons sit in the top-left corner. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
 - When the viewport settles (debounce ~300 ms after pan/zoom stops), emit `Action::ViewportChanged(bbox)`, which triggers the bbox query (§4.4).
-- "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. The panel shows the coordinates plus a "Use map center" button.
+- "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. Opening a fresh form shows an info toast: "Tip: click on the map to place your campsite." The panel shows the coordinates plus a "Use map center" button.
 - Campsite form fields: title, description, tags (multi-select chips from the loaded tag list), tent capacity (a stepper or slider 1–10 that shows `10+` at max), photos (thumbnails with × to remove, and "Add photos (n/3)", which opens the browser file dialog; wrong type, size or count → error toast). Picked photos are previewed from a small JPEG made by the browser and uploaded on save.
 - **Filters panel** (`Panel::Filters`): tag chips (all selected tags must match) and a tent capacity range (one two-handle slider, `widgets::range_slider`, 1–10+; the handles can't cross), plus Reset. Filters are global: they apply to the markers and to search, and stay on when the panel is closed. Each change is an `Action` that re-runs the bbox query and the current search.
 
@@ -333,6 +348,7 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 ```
 
 **Top bar** (always visible, fixed height from the theme):
+
 - Left: app name/logo. Clicking it closes the panel.
 - Center: **total number of campsites** (`stats`, unfiltered), refreshed on startup and after a campsite is created or deleted. Then the **search field** (`layout.search_width`, `search_width_narrow` on narrow screens): Enter runs the search and opens the Search panel, × clears it. Then the **Filters** button, which shows the number of active filters and is filled (`tag_selected_*` colors) while any is on; it toggles the Filters panel.
 - Right, logged out: **Log in**, **Sign up**. Logged in: **+ New campsite**, then the avatar/name menu (Profile, Moderation if admin, Log out).
@@ -341,24 +357,26 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 
 **Side panels:** only one is active at a time. They share one frame: a header with the title plus a collapse button (◀/▶) and a close button (✕), and a scrollable body.
 
-| Panel | Hash | Access | Content |
-|---|---|---|---|
-| Login | `#/login` | logged out | email, password, link to Register |
-| Register | `#/register` | logged out | display name, email, password + confirm, link to Login |
-| Profile | `#/profile` | logged in | display name, avatar, change email (PocketBase email-change flow), change password (needs old password), log out, delete account (confirmation typed inside the panel, no browser dialogs) |
-| New campsite | `#/new` | logged in | form from §5.5, draft pin on the map |
-| Campsite | `#/campsite/<id>` | public | photos (thumbnail strip; a click opens the photo viewer, see below), title, author, stats, tags, tent capacity, coordinates (copy button), description, rating widget (not on your own campsite), comments + comment box, Report buttons; Edit/Delete if it's yours |
-| Edit campsite | `#/campsite/<id>/edit` | owner | same form as New campsite, prefilled |
-| Report | — (no route) | logged in | preview of the reported campsite or comment, reason, details, Send / Cancel (back to the campsite). §5.8 |
-| Moderation | `#/moderation` | admin | §5.8 |
-| Search results | `#/search` | public | the submitted query, a note when filters are on, matching campsite names (50 max, "showing 50 of N"). A click centers the map on the campsite and opens it; the Campsite panel then shows "◀ Search results" to come back |
-| Filters | `#/filters` | public | §5.5 |
+| Panel          | Hash                   | Access     | Content                                                                                                                                                                                                                                                             |
+| -------------- | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Login          | `#/login`              | logged out | email, password, link to Register                                                                                                                                                                                                                                   |
+| Register       | `#/register`           | logged out | display name, email, password + confirm, link to Login                                                                                                                                                                                                              |
+| Profile        | `#/profile`            | logged in  | display name, avatar, change email (PocketBase email-change flow), change password (needs old password), log out, delete account (confirmation typed inside the panel, no browser dialogs)                                                                          |
+| New campsite   | `#/new`                | logged in  | form from §5.5, draft pin on the map                                                                                                                                                                                                                                |
+| Campsite       | `#/campsite/<id>`      | public     | photos (thumbnail strip; a click opens the photo viewer, see below), title, author, stats, tags, tent capacity, coordinates (copy button), description, rating widget (not on your own campsite), comments + comment box, Report buttons; Edit/Delete if it's yours |
+| Edit campsite  | `#/campsite/<id>/edit` | owner      | same form as New campsite, prefilled                                                                                                                                                                                                                                |
+| Report         | — (no route)           | logged in  | preview of the reported campsite or comment, reason, details, Send / Cancel (back to the campsite). §5.8                                                                                                                                                            |
+| Moderation     | `#/moderation`         | admin      | §5.8                                                                                                                                                                                                                                                                |
+| Search results | `#/search`             | public     | the submitted query, a note when filters are on, matching campsite names (50 max, "showing 50 of N"). A click centers the map on the campsite and opens it; the Campsite panel then shows "◀ Search results" to come back                                           |
+| Filters        | `#/filters`            | public     | §5.5                                                                                                                                                                                                                                                                |
 
 Behavior:
+
 - **Collapse** (◀) shrinks the panel to a thin strip and keeps its state, including unsaved form drafts. **Close** (✕) clears the panel and resets the hash to `#/`. Closing a form with unsaved changes asks for confirmation inside the panel.
 - Clicking a marker opens the Campsite panel, or switches to it if another panel is open. The selected marker is highlighted, and the map pans only if the marker is hidden behind the panel.
 - **Wide screens** (≥ `layout.narrow_breakpoint`): the panel is docked to the **right** with `layout.side_panel_width` and the user can resize it within the min/max. **Narrow screens:** the panel covers the whole map area under the top bar, and the top bar compacts (the count stays, the buttons move into a ☰ menu).
-- The panel slides open and closed over `layout.panel_animation_ms`. Use 0 to turn animation off.
+- The panel slides open and closed, and slides to and from its collapsed strip, over `layout.panel_animation_ms` (`widgets::panel_frame`, egui `Panel::show_switched`). Use 0 to turn animation off. Dragging the resize edge all the way in (or double-clicking it) collapses the panel.
+- Clickable widgets show a pointer cursor: every `Button` through `Visuals::interact_cursor` (set in `Theme::apply`), and custom widgets, radios and sliders set it themselves.
 - Errors appear as toasts at the bottom-left of the map area, or inline in forms.
 
 ### 5.7 Theme (`frontend/assets/theme.json`)
@@ -391,22 +409,34 @@ Behavior:
 - Test every panel at both wide and narrow widths.
 - No hard-coded style values (§5.7). If you need a new value, add it to `theme.json` **and** `Theme`, with a sensible name.
 - No browser dialogs (`alert`/`confirm`). Confirmations are shown inside the panel.
-- Remote data that is loading uses the themed spinner in `ui/widgets/spinner.rs`, never `ui.spinner()`: `loading_block` for the main content of a panel (campsite, search results, first page of comments), `loading` (inline, with a label) for a section inside a panel, and `Spinner` with a color override on non-panel backgrounds such as the top bar (campsite count, markers being fetched).
+- Remote data that is loading uses the themed spinner in `ui/widgets/spinner.rs`, never `ui.spinner()`: `loading_block` for the main content of a panel (campsite, search results, first page of comments), `loading` (inline, with a label) for a section inside a panel, and `Spinner` with a color override on non-panel backgrounds such as the top bar (campsite count, markers being fetched). A spinner that comes and goes inside a row of widgets uses `Spinner::visible(false)` rather than not being drawn, so it keeps its space and the row doesn't shift (top bar: markers being fetched). A value being refreshed keeps showing its last loaded value rather than going back to a spinner (campsite count).
 - Icon characters must exist in egui's default fonts, or they render as an empty box. Use the ones already in the UI: `×` (close, U+00D7, not `✕`), `◀` `▶` `★` `⛺`.
 - Client-side validation mirrors PocketBase field constraints for UX, but the server remains authoritative.
+
+### 5.10 SEO (`frontend/assets/seo.json`)
+
+The UI is a canvas, so search engines and link-preview scrapers only see the static HTML (ADR 0012).
+
+- **Every SEO value lives in `seo.json`**: site URL, name, language and locale, title (≤ 60 chars), description (70–160), robots, favicon, Open Graph / Twitter card image, schema.org data, the text of the crawlable page, sitemap paths and robots.txt disallows. Never put SEO tags straight into `index.html`.
+- **`tools/seo-gen`** (host binary, workspace member) runs as a Trunk `post_build` hook, in `trunk serve` and `trunk build` alike. It validates `seo.json` (a bad value fails the build) and fills the markers of the staged `index.html`: `lang="seo:lang"`, `<!-- seo:head -->` (title, description, robots, canonical, `theme-color`, favicon, `og:*`, `twitter:*`, JSON-LD `WebSite` + `WebApplication`, page background/text colors) and `<!-- seo:body -->`. It also writes `robots.txt` and `sitemap.xml` and copies the images from `assets/seo/` to the site root. Colors come from `theme.json`.
+- **`<main id="about">`** is real content that describes the app: a heading, an intro and the feature list. Crawlers and no-JS browsers read it, and the canvas covers it once the app runs. Keep it truthful to what the app shows, because hidden or keyword-stuffed text is penalized as cloaking.
+- **Placeholder domain:** while `site_url` is `https://example.com`, the build prints a warning. Set the real domain before deploying.
+- **Images:** `og-image.png` (1200×630, PNG because scrapers don't read SVG) is rendered from `og-image.svg`; the command is in the SVG.
+- **At runtime** the app only updates the tab title (`seo.rs`, applied in `app.rs`): the campsite name or panel title, then `· site_name`.
+- Only `/` is indexable: panels live in the URL hash, which search engines ignore. Per-campsite pages are future work (ADR 0012).
 
 ---
 
 ## 6. Cross-cutting concerns
 
-| Concern | Guideline |
-|---|---|
-| **Errors** | No `unwrap()`/`expect()` outside tests and `main.rs` startup. Errors surface to the user as toasts or inline form errors; log details with `log` (`eframe::WebLogger` sends it to the browser console). `console_error_panic_hook` is installed in `main.rs`. An invalid `theme.json` panics at startup, but `cargo test` catches that first. |
-| **Security** | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way). |
-| **Privacy** | Never expose user emails publicly. Campsite coordinates are public by design — state this in the UI when posting. |
-| **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`. |
-| **Config** | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default). Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`). |
-| **Time** | Store UTC (PocketBase does); format in local time in the UI. |
+| Concern         | Guideline                                                                                                                                                                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Errors**      | No `unwrap()`/`expect()` outside tests and `main.rs` startup. Errors surface to the user as toasts or inline form errors; log details with `log` (`eframe::WebLogger` sends it to the browser console). `console_error_panic_hook` is installed in `main.rs`. An invalid `theme.json` panics at startup, but `cargo test` catches that first. |
+| **Security**    | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way).                                                                                                                              |
+| **Privacy**     | Never expose user emails publicly. Campsite coordinates are public by design — state this in the UI when posting.                                                                                                                                                                                                                             |
+| **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`.                                                                                                                           |
+| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default). Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
+| **Time**        | Store UTC (PocketBase does); format in local time in the UI.                                                                                                                                                                                                                                                                                  |
 
 ---
 
@@ -414,18 +444,20 @@ Behavior:
 
 Services:
 
-| Service | Purpose | Ports |
-|---|---|---|
-| `pocketbase` | Built from `backend/Dockerfile`, pinned version, runs `serve --http=0.0.0.0:8090` with automigrate enabled (`PB_DEV=1`) | `8090` (API + admin `/_/`) |
-| `mailpit` | Catches the emails PocketBase sends (confirmation links) | `8025` (web UI) |
-| `frontend` | Rust image with `wasm32-unknown-unknown` + `trunk`; runs `trunk serve --address 0.0.0.0` with hot reload; proxies `/api/` to `http://pocketbase:8090/api/` | `8080` |
+| Service      | Purpose                                                                                                                                                    | Ports                      |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `pocketbase` | Built from `backend/Dockerfile`, pinned version, runs `serve --http=0.0.0.0:8090` with automigrate enabled (`PB_DEV=1`)                                    | `8090` (API + admin `/_/`) |
+| `mailpit`    | Catches the emails PocketBase sends (confirmation links)                                                                                                   | `8025` (web UI)            |
+| `frontend`   | Rust image with `wasm32-unknown-unknown` + `trunk`; runs `trunk serve --address 0.0.0.0` with hot reload; proxies `/api/` to `http://pocketbase:8090/api/` | `8080`                     |
 
 Volumes:
+
 - `pb_data` → named volume (DB + uploads).
 - `./backend/pb_migrations` and `./backend/pb_hooks` → bind-mounted so schema/hook edits apply live and generated migrations land in the repo.
 - `./frontend` → bind-mounted source; **cargo registry and `target/` in named volumes** so rebuilds stay fast and the host `target/` isn't polluted.
 
 Conventions:
+
 - `docker compose up` must be the only command needed to get a working app at `http://localhost:8080`.
 - A superuser for dev is created from `.env` values (`PB_ADMIN_EMAIL`, `PB_ADMIN_PASSWORD`) via `pocketbase superuser upsert` in the entrypoint. Dev credentials only; never reuse elsewhere.
 - Seed data (a few users including one `role = admin`, ~50 campsites spread on the map with varied tags and tent capacities, ratings, comments, a few open reports) via `backend/seed/`, runnable with one command (document it in the README).
@@ -456,12 +488,12 @@ Conventions:
 
 ## 9. Testing strategy
 
-| Level | What | How |
-|---|---|---|
-| Unit (Rust) | `state::apply`, controller logic, filter building/escaping, DTO (de)serialization against recorded PocketBase JSON fixtures | `cargo test` on the host (pure logic, no wasm needed) |
-| Wasm | Anything touching `web-sys` (currently only `main.rs`) | `wasm-bindgen-test` (headless browser), only where needed |
+| Level         | What                                                                                                                                                                                                                                                                                             | How                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Unit (Rust)   | `state::apply`, controller logic, filter building/escaping, DTO (de)serialization against recorded PocketBase JSON fixtures                                                                                                                                                                      | `cargo test` on the host (pure logic, no wasm needed)                                                        |
+| Wasm          | Anything touching `web-sys` (currently only `main.rs`)                                                                                                                                                                                                                                           | `wasm-bindgen-test` (headless browser), only where needed                                                    |
 | Backend rules | Every API rule: anon/user/owner/other-user/admin cases for list/view/create/update/delete. Must include: rating or commenting on your own campsite is rejected; a user can't set `role`/`hidden`/`status`; hidden content is invisible to others; non-admins can't list reports they didn't file | Script (e.g. shell + curl or a small Rust integration test) against the dockerized PocketBase with seed data |
-| Manual smoke | Map loads, markers appear, login, create campsite with photos (add, remove, 3/3 limit, bad type/size), browse them in the viewer (arrows, keys, thumbnails, Esc/backdrop close), rate, comment, narrow width | Checklist in the PR |
+| Manual smoke  | Map loads, markers appear, login, create campsite with photos (add, remove, 3/3 limit, bad type/size), browse them in the viewer (arrows, keys, thumbnails, Esc/backdrop close), rate, comment, narrow width                                                                                     | Checklist in the PR                                                                                          |
 
 **A change to an API rule without a corresponding rule test is incomplete.**
 
@@ -470,6 +502,7 @@ Conventions:
 ## 10. Definition of done (for agents)
 
 A task is done when:
+
 1. `docker compose up` still yields a working app.
 2. fmt, clippy (wasm target), and tests pass.
 3. Schema changes are committed as migrations; rules documented in `docs/API.md`.
@@ -488,6 +521,7 @@ Full-text search (beyond the title substring search), favorites, a richer admin 
 ## 12. Decision records
 
 Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Decision → Consequences):
+
 - 0001 — egui/wasm web-only frontend (accepted trade-off: canvas rendering, limited a11y/SEO).
 - 0002 — PocketBase as backend; rules as the authorization layer; JS hooks over custom Go build.
 - 0003 — `walkers` + OSM tiles for the map in dev.
@@ -501,12 +535,14 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0011 — Search by name (top bar → Search panel), global map filters (tags, tent range), client-side screen-space marker clustering.
 - 0012 — Production deployment: static frontend with a build-time API URL, PocketBase image with a persistent volume, S3 for files and backups, settings from env, email verification required to post.
 - 0013 — Backend image built and pushed to GHCR on each published GitHub Release (semver tags, `latest` for non-prereleases).
+- 0014 — Build-time SEO: `seo.json` rendered into the static page by a Trunk hook (`tools/seo-gen`); crawlable `#about` block; only `/` indexed.
 
 ---
 
 ## 13. Implementation status (MVP)
 
 **Done:**
+
 - Map with markers loaded by viewport.
 - Campsite count in the top bar.
 - Register (logs you in), log in, log out, a session that survives reloads.
@@ -526,6 +562,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 
 **Deferred (roadmap order):**
+
 1. Moderation panel (§5.8), with `resolved_by` and reporting users.
 2. URL hash routing (§5.3).
 3. Avatar upload (reuse the photo picker and multipart client).

@@ -48,7 +48,9 @@ impl MapView {
             }
         }
 
-        let map = Map::new(Some(&mut self.tiles), &mut self.memory, self.home).double_click_to_zoom(true);
+        let map = Map::new(Some(&mut self.tiles), &mut self.memory, self.home)
+            .double_click_to_zoom(true)
+            .zoom_with_ctrl(false);
         let (bbox, center, rect, zoom_into) = map
             .show(ui, |ui, response, projector, memory| {
                 let zoom_into = draw_markers(ui, response, projector, memory.zoom(), state, theme, actions);
@@ -207,6 +209,10 @@ fn draw_markers(
             Hit::Cluster { count, .. } => format!("{count} campsites · click to zoom in"),
         };
         label(&painter, theme, pos + Vec2::new(radius + 4.0, 0.0), &text);
+    } else if response.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    } else if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
     }
 
     if response.clicked() {

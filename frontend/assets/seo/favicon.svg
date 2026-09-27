@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Placeholder mark in theme.json colors (top_bar_bg, accent, background). -->
+  <rect width="64" height="64" rx="12" fill="#2F4F3A"/>
+  <path d="M32 12 L54 50 H10 Z" fill="#E07A2F"/>
+  <path d="M32 28 L41 50 H23 Z" fill="#F4F1EA"/>
+</svg>

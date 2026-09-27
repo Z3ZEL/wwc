@@ -44,7 +44,10 @@ impl Controller {
             Action::ToggleCollapse => state.panel_collapsed = !state.panel_collapsed,
 
             Action::RefreshCount => {
-                state.campsite_count = Remote::Loading;
+                // Keep the last count on screen while refreshing: no spinner, no layout shift.
+                if !matches!(state.campsite_count, Remote::Loaded(_)) {
+                    state.campsite_count = Remote::Loading;
+                }
                 self.api.count_campsites(self.done(Event::CampsiteCount));
             }
             Action::LoadTags => {
@@ -329,6 +332,7 @@ impl Controller {
             Some(Panel::NewCampsite) => {
                 if state.panel != target {
                     state.campsite_form = CampsiteForm::default();
+                    state.toast(ToastKind::Info, "Tip: click on the map to place your campsite.");
                 }
             }
             Some(Panel::EditCampsite(id)) => {

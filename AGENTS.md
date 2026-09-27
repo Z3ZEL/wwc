@@ -20,4 +20,5 @@ Full-stack web app: an interactive map where anyone can browse campsites; logged
 - Keep egui / eframe / egui_extras / walkers versions in lockstep.
 - UI = one page: full-screen map + top bar (campsite count, auth buttons) + one collapsible side panel at a time (ARCHITECTURE §5.6). Flat design.
 - Never hard-code colors, fonts, sizes or spacing: everything comes from `frontend/assets/theme.json` via `Theme` (§5.7).
+- SEO text and tags come from `frontend/assets/seo.json`, rendered at build time by `tools/seo-gen` (§5.10); never hand-edit SEO tags in `index.html`.
 - Architecture changes update `docs/ARCHITECTURE.md` and add an ADR in `docs/adr/`.

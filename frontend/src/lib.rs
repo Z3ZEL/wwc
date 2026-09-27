@@ -7,6 +7,7 @@ pub mod api;
 pub mod config;
 pub mod controller;
 pub mod map;
+pub mod seo;
 pub mod state;
 pub mod ui;
 
