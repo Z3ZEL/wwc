@@ -1,0 +1,10 @@
+[package]
+name = "seo-gen"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Trunk post_build hook: renders frontend/assets/seo.json into index.html, robots.txt and sitemap.xml"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

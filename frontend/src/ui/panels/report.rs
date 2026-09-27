@@ -1,7 +1,7 @@
 //! Report panel: flag a campsite or a comment for admin review (ARCHITECTURE §5.8).
 //! Reports are read in the PocketBase dashboard for now.
 
-use egui::{RichText, TextEdit, Ui};
+use egui::{CursorIcon, RichText, TextEdit, Ui};
 
 use crate::actions::Action;
 use crate::api::models::{ReportReason, ReportTarget};
@@ -19,7 +19,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, target: &ReportTar
     let f = &mut state.report;
     section_title(ui, "Why are you reporting it?");
     for &reason in ReportReason::for_target(target) {
-        if ui.radio(f.reason == Some(reason), reason.label()).clicked() {
+        if ui.radio(f.reason == Some(reason), reason.label()).on_hover_cursor(CursorIcon::PointingHand).clicked() {
             f.reason = Some(reason);
         }
     }

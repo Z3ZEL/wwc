@@ -26,11 +26,12 @@ pub struct Spinner {
     size: SpinnerSize,
     color: Option<Color32>,
     track: Option<Option<Color32>>,
+    visible: bool,
 }
 
 impl Spinner {
     pub fn new(size: SpinnerSize) -> Self {
-        Self { size, color: None, track: None }
+        Self { size, color: None, track: None, visible: true }
     }
 
     /// Arc color (default `colors.spinner`).
@@ -45,6 +46,13 @@ impl Spinner {
         self
     }
 
+    /// When false, the spinner keeps its space but draws nothing, so a spinner that comes
+    /// and goes doesn't shift the widgets after it.
+    pub fn visible(mut self, visible: bool) -> Self {
+        self.visible = visible;
+        self
+    }
+
     /// Draws the spinner and keeps egui repainting while it is visible.
     pub fn show(self, ui: &mut Ui, theme: &Theme) -> Response {
         let l = &theme.layout;
@@ -53,6 +61,9 @@ impl Spinner {
             SpinnerSize::Block => l.spinner_size_block,
         };
         let (rect, response) = ui.allocate_exact_size(Vec2::splat(diameter), Sense::hover());
+        if !self.visible {
+            return response;
+        }
         response.widget_info(|| WidgetInfo::labeled(WidgetType::ProgressIndicator, true, "Loading"));
         if !ui.is_rect_visible(rect) {
             return response;
@@ -113,14 +124,14 @@ mod tests {
 
     /// Runs a few passes (egui repaints on its own at startup) and returns the spinner size
     /// and the repaint delay egui asked for after the last one.
-    fn render(size: Option<SpinnerSize>) -> (Option<Vec2>, Duration) {
+    fn render(spinner: Option<Spinner>) -> (Option<Vec2>, Duration) {
         let theme = Theme::load();
         let ctx = Context::default();
         let mut drawn = None;
         let mut delay = Duration::MAX;
         for _ in 0..5 {
             let mut out = ctx.run_ui(RawInput::default(), |ui| {
-                drawn = size.map(|s| spinner(ui, &theme, s).rect.size());
+                drawn = spinner.map(|s| s.show(ui, &theme).rect.size());
             });
             out.textures_delta.clear(); // no renderer here to upload the font atlas to
             delay = out.viewport_output.get(&ViewportId::ROOT).map_or(Duration::MAX, |v| v.repaint_delay);
@@ -131,13 +142,21 @@ mod tests {
     #[test]
     fn sizes_come_from_the_theme() {
         let l = Theme::load().layout;
-        assert_eq!(render(Some(SpinnerSize::Inline)).0, Some(Vec2::splat(l.spinner_size_inline)));
-        assert_eq!(render(Some(SpinnerSize::Block)).0, Some(Vec2::splat(l.spinner_size_block)));
+        assert_eq!(render(Some(Spinner::new(SpinnerSize::Inline))).0, Some(Vec2::splat(l.spinner_size_inline)));
+        assert_eq!(render(Some(Spinner::new(SpinnerSize::Block))).0, Some(Vec2::splat(l.spinner_size_block)));
     }
 
     #[test]
     fn repaints_only_while_shown() {
-        assert_eq!(render(Some(SpinnerSize::Inline)).1, Duration::ZERO);
+        assert_eq!(render(Some(Spinner::new(SpinnerSize::Inline))).1, Duration::ZERO);
         assert_ne!(render(None).1, Duration::ZERO, "no spinner, no busy repaint");
+    }
+
+    #[test]
+    fn hidden_spinner_keeps_its_space_without_repainting() {
+        let l = Theme::load().layout;
+        let (size, delay) = render(Some(Spinner::new(SpinnerSize::Inline).visible(false)));
+        assert_eq!(size, Some(Vec2::splat(l.spinner_size_inline)));
+        assert_ne!(delay, Duration::ZERO);
     }
 }

@@ -251,6 +251,8 @@ impl Theme {
         let border = Stroke::new(self.shape.border_width, c.border);
         let radius = self.radius();
         let v = &mut style.visuals;
+        // Buttons show a pointer; other clickable widgets set it themselves.
+        v.interact_cursor = Some(egui::CursorIcon::PointingHand);
         v.dark_mode = false;
         v.override_text_color = Some(c.text);
         v.weak_text_color = Some(c.text_muted);

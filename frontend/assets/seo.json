@@ -1,0 +1,41 @@
+{
+  "site_url": "https://example.com",
+  "site_name": "WWC",
+  "lang": "en",
+  "locale": "en_US",
+  "title": "WWC — Find and share campsites on a map",
+  "description": "Browse campsites on an interactive map, see ratings, photos and tent capacity, and share your own spots with the camping community. Free to browse.",
+  "robots": "index, follow",
+  "favicon": "favicon.svg",
+
+  "open_graph": {
+    "type": "website",
+    "image": "og-image.png",
+    "image_width": 1200,
+    "image_height": 630,
+    "image_alt": "WWC: a map of campsites shared by campers"
+  },
+  "twitter_card": "summary_large_image",
+
+  "structured_data": {
+    "application_category": "TravelApplication",
+    "operating_system": "Web",
+    "price": "0",
+    "price_currency": "EUR"
+  },
+
+  "page": {
+    "heading": "Find and share campsites on a map",
+    "intro": "WWC is a free, community-made map of campsites. Anyone can browse it; campers with an account add the spots they know, with photos, tags and the number of tents that fit.",
+    "features": [
+      "Browse every campsite on an interactive map, no account needed",
+      "Search campsites by name and filter them by tags and tent capacity",
+      "See photos, ratings and comments from other campers",
+      "Sign up to post your own campsites, rate and comment on others",
+      "Report wrong or inappropriate content to the moderators"
+    ]
+  },
+
+  "sitemap": ["/"],
+  "robots_disallow": ["/api/"]
+}

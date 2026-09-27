@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["frontend"]
+members = ["frontend", "tools/seo-gen"]
 
 [profile.release]
 opt-level = "s"

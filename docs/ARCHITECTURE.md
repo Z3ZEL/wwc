@@ -72,9 +72,11 @@ wwc/
 ├── frontend/
 │   ├── Cargo.toml             # eframe/walkers are wasm-only deps; the rest also builds on the host
 │   ├── Dockerfile.dev         # rust + trunk image for docker compose
-│   ├── Trunk.toml             # Build config (the /api proxy comes from TRUNK_SERVE_PROXY_* env vars)
-│   ├── index.html
+│   ├── Trunk.toml             # Build config (the /api proxy comes from TRUNK_SERVE_PROXY_* env vars) + seo-gen hook
+│   ├── index.html             # Page shell with SEO markers, filled by tools/seo-gen
 │   ├── assets/theme.json      # ALL colors, fonts, sizes, spacing — see §5.7
+│   ├── assets/seo.json        # ALL SEO text and settings — see §5.10
+│   ├── assets/seo/            # favicon.svg, og-image.svg/.png (social preview)
 │   ├── tests/fixtures/        # Recorded PocketBase JSON for DTO tests
 │   └── src/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
@@ -86,12 +88,14 @@ wwc/
 │       ├── api/               # PocketBase client, DTOs, errors (the only HTTP code)
 │       ├── map/               # view.rs: walkers map, markers, draft pin, viewport → bbox (wasm only)
 │       │                      # cluster.rs: pure screen-space marker clustering (host-tested)
-│       ├── web/               # browser APIs egui lacks (photo file picker), wasm only
+│       ├── seo.rs             # browser tab title from seo.json
+│       ├── web/               # browser APIs egui lacks (photo file picker, document title), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters
 │           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider
+├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
 ├── backend/
 │   ├── Dockerfile             # Downloads a *pinned* PocketBase release
 │   ├── entrypoint.sh          # migrate, upsert dev superuser, serve
@@ -301,8 +305,9 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 - Markers are painted in the `Map::show` closure (`map/view.rs`); clicking one emits `Action::OpenPanel(Panel::Campsite(id))`. Markers are colored by state: normal, your own, selected.
 - **Clustering** (`map/cluster.rs`): below `map.cluster_max_zoom`, markers closer than `map.cluster_distance` points on screen are drawn as one circle with a count (radius `cluster_radius`…`cluster_radius_max`). Clicking a cluster centers on it and zooms in by `cluster_zoom_step`. The selected campsite is always drawn alone. The grouping only uses relative screen positions, so panning doesn't change it.
 - `AppState.map_focus`: set by `Action::FocusCampsite` (a search result click). The map takes it on its next frame, centers there and zooms in to at least `map.focus_zoom`.
+- Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons sit in the top-left corner. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
 - When the viewport settles (debounce ~300 ms after pan/zoom stops), emit `Action::ViewportChanged(bbox)`, which triggers the bbox query (§4.4).
-- "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. The panel shows the coordinates plus a "Use map center" button.
+- "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. Opening a fresh form shows an info toast: "Tip: click on the map to place your campsite." The panel shows the coordinates plus a "Use map center" button.
 - Campsite form fields: title, description, tags (multi-select chips from the loaded tag list), tent capacity (a stepper or slider 1–10 that shows `10+` at max), photos (thumbnails with × to remove, and "Add photos (n/3)", which opens the browser file dialog; wrong type, size or count → error toast). Picked photos are previewed from a small JPEG made by the browser and uploaded on save.
 - **Filters panel** (`Panel::Filters`): tag chips (all selected tags must match) and a tent capacity range (one two-handle slider, `widgets::range_slider`, 1–10+; the handles can't cross), plus Reset. Filters are global: they apply to the markers and to search, and stay on when the panel is closed. Each change is an `Action` that re-runs the bbox query and the current search.
 
@@ -351,7 +356,8 @@ Behavior:
 - **Collapse** (◀) shrinks the panel to a thin strip and keeps its state, including unsaved form drafts. **Close** (✕) clears the panel and resets the hash to `#/`. Closing a form with unsaved changes asks for confirmation inside the panel.
 - Clicking a marker opens the Campsite panel, or switches to it if another panel is open. The selected marker is highlighted, and the map pans only if the marker is hidden behind the panel.
 - **Wide screens** (≥ `layout.narrow_breakpoint`): the panel is docked to the **right** with `layout.side_panel_width` and the user can resize it within the min/max. **Narrow screens:** the panel covers the whole map area under the top bar, and the top bar compacts (the count stays, the buttons move into a ☰ menu).
-- The panel slides open and closed over `layout.panel_animation_ms`. Use 0 to turn animation off.
+- The panel slides open and closed, and slides to and from its collapsed strip, over `layout.panel_animation_ms` (`widgets::panel_frame`, egui `Panel::show_switched`). Use 0 to turn animation off. Dragging the resize edge all the way in (or double-clicking it) collapses the panel.
+- Clickable widgets show a pointer cursor: every `Button` through `Visuals::interact_cursor` (set in `Theme::apply`), and custom widgets, radios and sliders set it themselves.
 - Errors appear as toasts at the bottom-left of the map area, or inline in forms.
 
 ### 5.7 Theme (`frontend/assets/theme.json`)
@@ -384,9 +390,21 @@ Behavior:
 - Test every panel at both wide and narrow widths.
 - No hard-coded style values (§5.7). If you need a new value, add it to `theme.json` **and** `Theme`, with a sensible name.
 - No browser dialogs (`alert`/`confirm`). Confirmations are shown inside the panel.
-- Remote data that is loading uses the themed spinner in `ui/widgets/spinner.rs`, never `ui.spinner()`: `loading_block` for the main content of a panel (campsite, search results, first page of comments), `loading` (inline, with a label) for a section inside a panel, and `Spinner` with a color override on non-panel backgrounds such as the top bar (campsite count, markers being fetched).
+- Remote data that is loading uses the themed spinner in `ui/widgets/spinner.rs`, never `ui.spinner()`: `loading_block` for the main content of a panel (campsite, search results, first page of comments), `loading` (inline, with a label) for a section inside a panel, and `Spinner` with a color override on non-panel backgrounds such as the top bar (campsite count, markers being fetched). A spinner that comes and goes inside a row of widgets uses `Spinner::visible(false)` rather than not being drawn, so it keeps its space and the row doesn't shift (top bar: markers being fetched). A value being refreshed keeps showing its last loaded value rather than going back to a spinner (campsite count).
 - Icon characters must exist in egui's default fonts, or they render as an empty box. Use the ones already in the UI: `×` (close, U+00D7, not `✕`), `◀` `▶` `★` `⛺`.
 - Client-side validation mirrors PocketBase field constraints for UX, but the server remains authoritative.
+
+### 5.10 SEO (`frontend/assets/seo.json`)
+
+The UI is a canvas, so search engines and link-preview scrapers only see the static HTML (ADR 0012).
+
+- **Every SEO value lives in `seo.json`**: site URL, name, language and locale, title (≤ 60 chars), description (70–160), robots, favicon, Open Graph / Twitter card image, schema.org data, the text of the crawlable page, sitemap paths and robots.txt disallows. Never put SEO tags straight into `index.html`.
+- **`tools/seo-gen`** (host binary, workspace member) runs as a Trunk `post_build` hook, in `trunk serve` and `trunk build` alike. It validates `seo.json` (a bad value fails the build) and fills the markers of the staged `index.html`: `lang="seo:lang"`, `<!-- seo:head -->` (title, description, robots, canonical, `theme-color`, favicon, `og:*`, `twitter:*`, JSON-LD `WebSite` + `WebApplication`, page background/text colors) and `<!-- seo:body -->`. It also writes `robots.txt` and `sitemap.xml` and copies the images from `assets/seo/` to the site root. Colors come from `theme.json`.
+- **`<main id="about">`** is real content that describes the app: a heading, an intro and the feature list. Crawlers and no-JS browsers read it, and the canvas covers it once the app runs. Keep it truthful to what the app shows, because hidden or keyword-stuffed text is penalized as cloaking.
+- **Placeholder domain:** while `site_url` is `https://example.com`, the build prints a warning. Set the real domain before deploying.
+- **Images:** `og-image.png` (1200×630, PNG because scrapers don't read SVG) is rendered from `og-image.svg`; the command is in the SVG.
+- **At runtime** the app only updates the tab title (`seo.rs`, applied in `app.rs`): the campsite name or panel title, then `· site_name`.
+- Only `/` is indexable: panels live in the URL hash, which search engines ignore. Per-campsite pages are future work (ADR 0012).
 
 ---
 
@@ -484,6 +502,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0009 — MVP simplifications: `ehttp`, eframe storage for the session, lat/lng number fields, bash rule tests.
 - 0010 — Campsite photos: file field (3 max), multipart `@jsonPayload` saves, web-sys file picker with browser-made previews, `egui_extras` image loaders.
 - 0011 — Search by name (top bar → Search panel), global map filters (tags, tent range), client-side screen-space marker clustering.
+- 0012 — Build-time SEO: `seo.json` rendered into the static page by a Trunk hook (`tools/seo-gen`); crawlable `#about` block; only `/` indexed.
 
 ---
 

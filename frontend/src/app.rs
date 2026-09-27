@@ -9,6 +9,7 @@ use crate::api::ApiClient;
 use crate::api::models::Session;
 use crate::controller::Controller;
 use crate::map::MapView;
+use crate::seo::SeoTitles;
 use crate::state::{self, AppState};
 use crate::ui::theme::Theme;
 use crate::ui::{panels, photo_viewer, top_bar, widgets};
@@ -21,6 +22,9 @@ pub struct WwcApp {
     controller: Controller,
     events: Receiver<Event>,
     map: MapView,
+    seo: SeoTitles,
+    /// Last value written to `document.title`.
+    page_title: String,
 }
 
 impl WwcApp {
@@ -40,7 +44,7 @@ impl WwcApp {
         };
         let map = MapView::new(&cc.egui_ctx, &theme);
 
-        let mut app = Self { state, theme, controller, events, map };
+        let mut app = Self { state, theme, controller, events, map, seo: SeoTitles::load(), page_title: String::new() };
         for action in [Action::RefreshSession, Action::RefreshCount, Action::LoadTags] {
             app.controller.handle(&mut app.state, action);
         }
@@ -50,7 +54,7 @@ impl WwcApp {
 
 impl eframe::App for WwcApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let Self { state, theme, controller, events, map } = self;
+        let Self { state, theme, controller, events, map, seo, page_title } = self;
 
         let mut actions = Vec::new();
         while let Ok(event) = events.try_recv() {
@@ -67,6 +71,12 @@ impl eframe::App for WwcApp {
 
         for action in actions {
             controller.handle(state, action);
+        }
+
+        let title = seo.page_title(state);
+        if *page_title != title {
+            crate::web::set_document_title(&title);
+            *page_title = title;
         }
     }
 
