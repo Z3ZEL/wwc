@@ -40,6 +40,9 @@ cargo test -p frontend --lib
 backend/tests/rules.sh        # API permission tests, against the running PocketBase
 ```
 
+CI runs the same checks on every pull request and every push to `master` ([`.github/workflows/quality-gate.yml`](.github/workflows/quality-gate.yml)).
+PRs that touch `backend/pb_migrations/` also get an automatic "database structure change" warning comment ([`.github/workflows/db-migration-check.yml`](.github/workflows/db-migration-check.yml)).
+
 ## Tuning the look
 
 All colors, fonts, sizes and spacing live in [`frontend/assets/theme.json`](frontend/assets/theme.json). `cargo test` checks that the file parses and that text stays readable (contrast ≥ 4.5:1).
