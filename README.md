@@ -49,6 +49,15 @@ WWC_API_URL=https://api.example.com scripts/build-frontend.sh   # → frontend/d
 - `WWC_API_URL` is the public PocketBase URL. It's compiled into the wasm, so you need one build per environment. Set `PUBLIC_URL=/sub/path/` if the site isn't served from `/`.
 - No local Rust/Trunk? Build in the dev image: `docker compose run --rm -e WWC_API_URL=https://api.example.com frontend /app/scripts/build-frontend.sh`
 - Upload `frontend/dist/` to any static host (S3 + CDN, Netlify, Cloudflare Pages, nginx…). Serve `.wasm` as `application/wasm`. The JS and wasm file names are hashed, so they can be cached forever; serve `index.html` with `Cache-Control: no-cache`.
+- Set `PB_ORIGINS` on the backend to the frontend's origin, or every API call is blocked by CORS.
+
+**Building on a host or in CI** (Render, Netlify, Cloudflare Pages, GitHub Actions…): build environments don't ship Trunk or the pinned toolchain, so install them in the same step. On any Linux x86_64 machine with `curl`, `tar` and `cc`:
+
+```sh
+sh scripts/install-frontend-tools.sh && sh scripts/build-frontend.sh
+```
+
+Set the `WWC_API_URL` env var on the host, and use `frontend/dist` as the publish directory. The install script is idempotent: it installs rustup (in `$CARGO_HOME`, default `~/.cargo`), the toolchain from `rust-toolchain.toml`, and the pinned Trunk release, skipping what's already there.
 
 ### Backend: PocketBase image
 

@@ -1,5 +1,6 @@
 FROM rust:1.98.1-slim
 
+# Trunk version: keep in lockstep with TRUNK_VERSION in scripts/install-frontend-tools.sh.
 RUN rustup target add wasm32-unknown-unknown \
  && apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
