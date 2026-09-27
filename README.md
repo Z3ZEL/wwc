@@ -70,7 +70,9 @@ docker run -d --name wwc-pocketbase --restart unless-stopped \
 
 Put a TLS-terminating proxy or load balancer in front of port 8090. The image runs the committed migrations on start, and `/api/health` is its healthcheck.
 
-**Released images:** publishing a GitHub Release tagged `vX.Y.Z` builds the image and pushes it to `ghcr.io/z3zel/wwc-backend` (tags `X.Y.Z`, `X.Y`, `latest`; prereleases get only `X.Y.Z-…`). See ADR [0013](docs/adr/0013-backend-image-publishing.md). You can also start it by hand from the Actions tab ("Backend image").
+**Released images:** publishing a GitHub Release tagged `vX.Y.Z` builds the image for `linux/amd64` and `linux/arm64/v8` and pushes it to `ghcr.io/z3zel/wwc-backend` (tags `X.Y.Z`, `X.Y`, `latest`; prereleases get only `X.Y.Z-…`). The tag must be full semver: `v1.0.0-rc.1` works, `1.0-rc.1` gets no version tag. The `sha256-…` entries in the GHCR package page are build attestations, not images to pull. See ADR [0013](docs/adr/0013-backend-image-publishing.md). You can also start it by hand from the Actions tab ("Release").
+
+**Frontend deploy:** a full (non-pre) release then calls the Render deploy hook, which rebuilds the frontend from the branch Render tracks. Store the hook URL in the `DEPLOY_HOOK` repository secret (Settings → Secrets and variables → Actions). See ADR [0015](docs/adr/0015-frontend-deploy-on-release.md).
 
 ```sh
 gh release create v0.1.0 --generate-notes      # → ghcr.io/z3zel/wwc-backend:0.1.0

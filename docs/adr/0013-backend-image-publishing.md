@@ -14,11 +14,12 @@ release.
 - Tags: `X.Y.Z` and `X.Y` from the release tag `vX.Y.Z`, `latest` for non-prerelease releases only,
   `sha-<short>` always, the branch name for manual runs. OCI labels link the package to the repo, and a
   build-provenance attestation is pushed with the image.
-- `linux/amd64` only for now. The Dockerfile already uses `TARGETARCH`, so `linux/arm64` is a one-line
-  addition plus QEMU.
+- Platforms: `linux/amd64` and `linux/arm64/v8` (multi-arch manifest). arm64 is built under QEMU; that's
+  cheap because the Dockerfile only downloads PocketBase for `TARGETARCH`, nothing is compiled.
 - Releases only, not every push to master: an image is something we deploy, and migrations run on the
   host at startup (`migrate up`), so each published tag is a deliberate schema version.
-- The frontend is not published: its API URL is compiled in (ADR 0012), so it's built per environment.
+- The frontend is not published as an image: its API URL is compiled in (ADR 0012), so it's built per
+  environment. A full release triggers its deploy on the static host instead (ADR 0015).
 
 ## Consequences
 - Hosts pull a versioned image instead of building from source; rolling back = deploying the previous tag
