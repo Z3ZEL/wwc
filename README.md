@@ -70,6 +70,15 @@ docker run -d --name wwc-pocketbase --restart unless-stopped \
 
 Or use `docker compose -f deploy/docker-compose.prod.yml --env-file .env.prod up -d --build`. Put a TLS-terminating proxy or load balancer in front of port 8090. The image runs the committed migrations on start, and `/api/health` is its healthcheck.
 
+**Released images:** publishing a GitHub Release tagged `vX.Y.Z` builds the image and pushes it to `ghcr.io/z3zel/wwc-backend` (tags `X.Y.Z`, `X.Y`, `latest`; prereleases get only `X.Y.Z-…`). See ADR [0013](docs/adr/0013-backend-image-publishing.md). You can also start it by hand from the Actions tab ("Backend image").
+
+```sh
+gh release create v0.1.0 --generate-notes      # → ghcr.io/z3zel/wwc-backend:0.1.0
+docker pull ghcr.io/z3zel/wwc-backend:0.1.0     # use it instead of `docker build` above
+```
+
+Hosts that deploy an existing image (e.g. Render's "Existing Image") can use this URL. The package is private after the first publish: make it public in its GitHub package settings, or give the host a registry credential (a token with `read:packages`).
+
 - **Persistent storage:** mount a volume on `/pb_data`. It holds the SQLite database (plus local files if S3 is off). Don't run more than one container on the same volume.
 - **CORS:** set `PB_ORIGINS` to the frontend origin (e.g. `https://wwc.example.com`).
 - **First superuser:** set `PB_ADMIN_EMAIL` and `PB_ADMIN_PASSWORD` for the first boot, then remove them. The dashboard is at `https://<api host>/_/`.
