@@ -1,0 +1,58 @@
+{
+  "items": [
+    {
+      "author": "nzano60te96bia3",
+      "body": "Beautiful view at sunrise!",
+      "campsite": "1yt2mk04cecrmv4",
+      "collectionId": "pbc_533777971",
+      "collectionName": "comments",
+      "created": "2026-09-25 20:07:57.374Z",
+      "expand": {
+        "author": {
+          "avatar": "",
+          "collectionId": "_pb_users_auth_",
+          "collectionName": "users",
+          "created": "2026-09-25 20:07:44.026Z",
+          "emailVisibility": false,
+          "id": "nzano60te96bia3",
+          "name": "Carol",
+          "role": "",
+          "updated": "2026-09-25 20:07:44.026Z",
+          "verified": false
+        }
+      },
+      "hidden": false,
+      "id": "clolziap2vsvwlg",
+      "updated": "2026-09-25 20:07:57.374Z"
+    },
+    {
+      "author": "q10ctsfsmfs280v",
+      "body": "Lots of mosquitoes in the evening.",
+      "campsite": "1yt2mk04cecrmv4",
+      "collectionId": "pbc_533777971",
+      "collectionName": "comments",
+      "created": "2026-09-25 20:07:57.352Z",
+      "expand": {
+        "author": {
+          "avatar": "",
+          "collectionId": "_pb_users_auth_",
+          "collectionName": "users",
+          "created": "2026-09-25 20:07:43.739Z",
+          "emailVisibility": false,
+          "id": "q10ctsfsmfs280v",
+          "name": "Bob",
+          "role": "",
+          "updated": "2026-09-25 20:07:43.739Z",
+          "verified": false
+        }
+      },
+      "hidden": false,
+      "id": "vr7bjs024k0wucd",
+      "updated": "2026-09-25 20:07:57.352Z"
+    }
+  ],
+  "page": 1,
+  "perPage": 20,
+  "totalItems": 2,
+  "totalPages": 1
+}

@@ -1,0 +1,39 @@
+# Development stack only. `docker compose up` → app on http://localhost:8080
+services:
+  pocketbase:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/pb_data
+      - ./backend/pb_migrations:/pb_migrations
+      - ./backend/pb_hooks:/pb_hooks
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
+      interval: 5s
+      retries: 20
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    command: trunk serve --address 0.0.0.0 --port 8080
+    environment:
+      # Same-origin API: the browser calls /api/*, Trunk forwards it to PocketBase.
+      TRUNK_SERVE_PROXY_BACKEND: http://pocketbase:8090/api/
+      TRUNK_SERVE_PROXY_REWRITE: /api/
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/app
+      - cargo_registry:/usr/local/cargo/registry
+      - frontend_target:/app/target
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+
+volumes:
+  pb_data:
+  cargo_registry:
+  frontend_target:

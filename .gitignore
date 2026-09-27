@@ -1,0 +1,6 @@
+/target
+/dist
+/frontend/dist
+pb_data/
+.env
+.codegraph/

@@ -1,0 +1,10 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[watch]
+watch = ["src", "assets", "index.html"]
+
+[serve]
+# The /api/ proxy to PocketBase is set with TRUNK_SERVE_PROXY_BACKEND / TRUNK_SERVE_PROXY_REWRITE
+# (see docker-compose.yml, or README for running trunk on the host).

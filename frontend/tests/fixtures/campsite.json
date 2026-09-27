@@ -1,0 +1,47 @@
+{
+  "author": "q10ctsfsmfs280v",
+  "collectionId": "pbc_1626116840",
+  "collectionName": "campsites",
+  "created": "2026-09-25 20:07:56.273Z",
+  "description": "A seeded campsite for development.",
+  "expand": {
+    "author": {
+      "avatar": "",
+      "collectionId": "_pb_users_auth_",
+      "collectionName": "users",
+      "created": "2026-09-25 20:07:43.739Z",
+      "emailVisibility": false,
+      "id": "q10ctsfsmfs280v",
+      "name": "Bob",
+      "role": "",
+      "updated": "2026-09-25 20:07:43.739Z",
+      "verified": false
+    },
+    "tags": [
+      {
+        "active": true,
+        "collectionId": "pbc_1219621782",
+        "collectionName": "tags",
+        "icon": "",
+        "id": "duh0cxtc8yah1cg",
+        "label": "Safe water",
+        "slug": "safe_water",
+        "sort_order": 1
+      }
+    ]
+  },
+  "hidden": false,
+  "id": "trtz3f8rta9yrh7",
+  "lat": 47.53382,
+  "lng": 1.25536,
+  "photos": [
+    "lake_k2j4h1s9dq.jpg",
+    "tent_8fh2k1l0aa.png"
+  ],
+  "tags": [
+    "duh0cxtc8yah1cg"
+  ],
+  "tent_capacity": 1,
+  "title": "Hill Bivouac #1",
+  "updated": "2026-09-25 20:07:56.273Z"
+}

@@ -1,0 +1,143 @@
+{
+  "name": "wwc-light",
+
+  "colors": {
+    "background": "#F4F1EA",
+    "surface": "#FFFFFF",
+    "surface_alt": "#EDE9DF",
+    "border": "#D9D4C7",
+
+    "text": "#1E2522",
+    "text_muted": "#5E6B64",
+    "text_disabled": "#A3AAA5",
+    "link": "#2F6E9E",
+
+    "primary": "#2F7D4F",
+    "on_primary": "#FFFFFF",
+    "accent": "#E07A2F",
+    "on_accent": "#1E2522",
+
+    "button_bg": "#EDE9DF",
+    "button_bg_hover": "#E2DDD0",
+    "button_text": "#1E2522",
+    "input_bg": "#FFFFFF",
+    "input_border": "#C9C3B4",
+    "input_border_focus": "#2F7D4F",
+    "selection": "#2F7D4F40",
+
+    "success": "#2F7D4F",
+    "warning": "#B7861A",
+    "danger": "#C0392B",
+    "info": "#2F6E9E",
+
+    "top_bar_bg": "#2F4F3A",
+    "top_bar_text": "#FFFFFF",
+    "top_bar_text_muted": "#C8D6CC",
+
+    "panel_bg": "#FFFFFF",
+    "panel_header_bg": "#F4F1EA",
+
+    "tag_bg": "#E3EFE7",
+    "tag_text": "#1F5535",
+    "tag_selected_bg": "#2F7D4F",
+    "tag_selected_text": "#FFFFFF",
+
+    "star_filled": "#F2B01E",
+    "star_empty": "#D9D4C7",
+
+    "hidden_badge_bg": "#8A8A8A",
+    "hidden_badge_text": "#FFFFFF",
+
+    "toast_bg": "#1E2522",
+    "toast_text": "#FFFFFF",
+
+    "photo_viewer_backdrop": "#000000D0",
+    "photo_viewer_bg": "#1E2522",
+    "photo_viewer_text": "#FFFFFF",
+    "photo_selected": "#E07A2F",
+
+    "spinner": "#2F7D4F",
+    "spinner_track": "#E3EFE7"
+  },
+
+  "typography": {
+    "font_family": "default",
+    "font_family_heading": "default",
+    "fonts": {
+      "default": null
+    },
+    "size_heading": 22.0,
+    "size_subheading": 17.0,
+    "size_body": 14.0,
+    "size_button": 14.0,
+    "size_small": 12.0,
+    "size_monospace": 13.0
+  },
+
+  "spacing": {
+    "item_spacing": [8.0, 8.0],
+    "button_padding": [12.0, 6.0],
+    "panel_padding": 16.0,
+    "section_gap": 20.0,
+    "top_bar_padding": [16.0, 0.0],
+    "photo_gap": 6.0
+  },
+
+  "shape": {
+    "corner_radius": 4.0,
+    "corner_radius_tag": 12.0,
+    "border_width": 1.0,
+    "focus_border_width": 2.0,
+    "shadows": false
+  },
+
+  "layout": {
+    "top_bar_height": 48.0,
+    "side_panel_width": 420.0,
+    "side_panel_min_width": 320.0,
+    "side_panel_max_width": 640.0,
+    "side_panel_collapsed_width": 28.0,
+    "panel_animation_ms": 150,
+    "narrow_breakpoint": 700.0,
+    "toast_duration_ms": 4000,
+    "photo_thumb_height": 90.0,
+    "photo_viewer_margin": 24.0,
+    "photo_viewer_thumb_height": 60.0,
+    "search_width": 260.0,
+    "search_width_narrow": 120.0,
+    "range_slider_handle_radius": 9.0,
+    "range_slider_track_height": 4.0,
+    "spinner_size_inline": 16.0,
+    "spinner_size_block": 32.0,
+    "spinner_stroke": 2.5,
+    "spinner_period_ms": 900
+  },
+
+  "map": {
+    "default_center": { "lat": 46.6, "lon": 2.4 },
+    "default_zoom": 6,
+    "max_zoom": 18,
+    "marker_radius": 7.0,
+    "marker_radius_selected": 10.0,
+    "marker_outline_width": 2.0,
+    "cluster_distance": 36.0,
+    "cluster_radius": 13.0,
+    "cluster_radius_max": 22.0,
+    "cluster_max_zoom": 15.0,
+    "cluster_zoom_step": 2.0,
+    "focus_zoom": 12.0,
+    "colors": {
+      "marker": "#E07A2F",
+      "marker_own": "#2F7D4F",
+      "marker_selected": "#C0392B",
+      "marker_draft": "#2F6E9E",
+      "cluster": "#2F4F3A",
+      "cluster_text": "#FFFFFF",
+      "marker_outline": "#FFFFFF",
+      "label_bg": "#FFFFFFE6",
+      "label_text": "#1E2522",
+      "attribution_bg": "#FFFFFFCC",
+      "attribution_text": "#1E2522"
+    }
+  }
+}
