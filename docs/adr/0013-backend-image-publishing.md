@@ -25,4 +25,4 @@ release.
   (only if no migration ran in between; migrations are forward-only).
 - The GHCR package is private on first publish: make it public in the package settings, or give the host a
   registry credential (a token with `read:packages`).
-- Building locally (`docker build backend`) and `deploy/docker-compose.prod.yml` still work unchanged.
+- Building locally (`docker build backend`) still works unchanged.

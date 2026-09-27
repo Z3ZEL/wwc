@@ -68,7 +68,6 @@ Product decisions (v0.2):
 wwc/
 ├── CLAUDE.md                  # Agent entry point (short, points here)
 ├── docker-compose.yml         # Dev stack (+ mailpit)
-├── deploy/docker-compose.prod.yml  # Production example: PocketBase + volume (§7.1)
 ├── scripts/build-frontend.sh  # Production static build (WWC_API_URL=… → frontend/dist/)
 ├── .env.example               # Every env var, documented, no secrets
 ├── Cargo.toml                 # Cargo workspace root (+ release profile)
@@ -471,7 +470,7 @@ Conventions:
 - **Storage:** SQLite stays on a persistent volume at `/pb_data`; uploaded files go to S3 (`PB_S3_*`) and scheduled backups to the same bucket (or `PB_BACKUPS_S3_*`). Losing the volume = restore the latest backup from the dashboard.
 - **Email:** SMTP from `PB_SMTP_*`; `PB_APP_URL` is the public PocketBase URL used in email links.
 - **Instance settings as code:** `backend/pb_settings.json` (non-secret: rate limits, logs, batch, app name) → optional `PB_SETTINGS_FILE` (per-deployment overrides) → `pb_settings.dev.json` in dev → `PB_*` env vars (secrets, per-environment values). Applied on every boot by `pb_hooks/settings.pb.js`; the dashboard is for inspection. Upload limits are field options, so they change through a migration, not settings.
-- TLS termination, domain and the host itself are left to the platform (see `deploy/docker-compose.prod.yml` for an example).
+- TLS termination, domain and the host itself are left to the platform.
 
 ---
 

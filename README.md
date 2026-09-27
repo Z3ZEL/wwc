@@ -68,7 +68,7 @@ docker run -d --name wwc-pocketbase --restart unless-stopped \
   -p 8090:8090 --env-file .env.prod -v wwc_pb_data:/pb_data wwc-pocketbase
 ```
 
-Or use `docker compose -f deploy/docker-compose.prod.yml --env-file .env.prod up -d --build`. Put a TLS-terminating proxy or load balancer in front of port 8090. The image runs the committed migrations on start, and `/api/health` is its healthcheck.
+Put a TLS-terminating proxy or load balancer in front of port 8090. The image runs the committed migrations on start, and `/api/health` is its healthcheck.
 
 **Released images:** publishing a GitHub Release tagged `vX.Y.Z` builds the image and pushes it to `ghcr.io/z3zel/wwc-backend` (tags `X.Y.Z`, `X.Y`, `latest`; prereleases get only `X.Y.Z-…`). See ADR [0013](docs/adr/0013-backend-image-publishing.md). You can also start it by hand from the Actions tab ("Backend image").
 
