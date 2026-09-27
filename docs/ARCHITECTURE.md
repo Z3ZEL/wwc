@@ -68,7 +68,6 @@ Product decisions (v0.2):
 wwc/
 ├── CLAUDE.md                  # Agent entry point (short, points here)
 ├── docker-compose.yml         # Dev stack (+ mailpit)
-├── deploy/docker-compose.prod.yml  # Production example: PocketBase + volume (§7.1)
 ├── scripts/build-frontend.sh  # Production static build (WWC_API_URL=… → frontend/dist/)
 ├── .env.example               # Every env var, documented, no secrets
 ├── Cargo.toml                 # Cargo workspace root (+ release profile)
@@ -466,12 +465,12 @@ Conventions:
 
 ### 7.1 Production (ADR 0012)
 
-- **Frontend:** `WWC_API_URL=https://api.example.com scripts/build-frontend.sh` → `frontend/dist/` (release build, wasm-opt). Host it on any static host; the API URL is baked in, so one build per environment.
-- **Backend:** the `backend/Dockerfile` image is self-contained: migrations and hooks baked in, non-root, checksum-verified PocketBase, `VOLUME /pb_data`. No `--automigrate`. `PB_ORIGINS` restricts CORS to the frontend origin. Published releases are pushed to `ghcr.io/<owner>/wwc-backend` by `.github/workflows/backend-image.yml` (ADR 0013).
+- **Frontend:** `WWC_API_URL=https://api.example.com scripts/build-frontend.sh` → `frontend/dist/` (release build, wasm-opt). Host it on any static host; the API URL is baked in, so one build per environment. In production it's on Render, and full GitHub Releases trigger its deploy hook (ADR 0015).
+- **Backend:** the `backend/Dockerfile` image is self-contained: migrations and hooks baked in, non-root, checksum-verified PocketBase, `VOLUME /pb_data`. No `--automigrate`. `PB_ORIGINS` restricts CORS to the frontend origin. Published releases are pushed to `ghcr.io/<owner>/wwc-backend` (`linux/amd64` + `linux/arm64/v8`) by `.github/workflows/backend-image.yml` (ADR 0013).
 - **Storage:** SQLite stays on a persistent volume at `/pb_data`; uploaded files go to S3 (`PB_S3_*`) and scheduled backups to the same bucket (or `PB_BACKUPS_S3_*`). Losing the volume = restore the latest backup from the dashboard.
 - **Email:** SMTP from `PB_SMTP_*`; `PB_APP_URL` is the public PocketBase URL used in email links.
 - **Instance settings as code:** `backend/pb_settings.json` (non-secret: rate limits, logs, batch, app name) → optional `PB_SETTINGS_FILE` (per-deployment overrides) → `pb_settings.dev.json` in dev → `PB_*` env vars (secrets, per-environment values). Applied on every boot by `pb_hooks/settings.pb.js`; the dashboard is for inspection. Upload limits are field options, so they change through a migration, not settings.
-- TLS termination, domain and the host itself are left to the platform (see `deploy/docker-compose.prod.yml` for an example).
+- TLS termination, domain and the host itself are left to the platform.
 
 ---
 
@@ -534,8 +533,9 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0010 — Campsite photos: file field (3 max), multipart `@jsonPayload` saves, web-sys file picker with browser-made previews, `egui_extras` image loaders.
 - 0011 — Search by name (top bar → Search panel), global map filters (tags, tent range), client-side screen-space marker clustering.
 - 0012 — Production deployment: static frontend with a build-time API URL, PocketBase image with a persistent volume, S3 for files and backups, settings from env, email verification required to post.
-- 0013 — Backend image built and pushed to GHCR on each published GitHub Release (semver tags, `latest` for non-prereleases).
+- 0013 — Backend image built for amd64 and arm64 and pushed to GHCR on each published GitHub Release (semver tags, `latest` for non-prereleases).
 - 0014 — Build-time SEO: `seo.json` rendered into the static page by a Trunk hook (`tools/seo-gen`); crawlable `#about` block; only `/` indexed.
+- 0015 — Full GitHub Releases trigger the Render frontend deploy hook (`DEPLOY_HOOK` secret) after the backend image is pushed.
 
 ---
 
@@ -557,7 +557,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 
 - Reports: the `reports` collection and a Report panel for campsites and comments (§5.8). Admins read them in the dashboard.
 - Email verification (required to post) with mailpit in dev, and a production setup: static frontend build, PocketBase image, S3 files and backups, SMTP (ADR 0012).
-- Backend image published to GHCR on each GitHub Release (ADR 0013).
+- Backend image (amd64 + arm64) published to GHCR on each GitHub Release (ADR 0013); full releases also deploy the frontend on Render (ADR 0015).
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 

@@ -68,9 +68,11 @@ docker run -d --name wwc-pocketbase --restart unless-stopped \
   -p 8090:8090 --env-file .env.prod -v wwc_pb_data:/pb_data wwc-pocketbase
 ```
 
-Or use `docker compose -f deploy/docker-compose.prod.yml --env-file .env.prod up -d --build`. Put a TLS-terminating proxy or load balancer in front of port 8090. The image runs the committed migrations on start, and `/api/health` is its healthcheck.
+Put a TLS-terminating proxy or load balancer in front of port 8090. The image runs the committed migrations on start, and `/api/health` is its healthcheck.
 
-**Released images:** publishing a GitHub Release tagged `vX.Y.Z` builds the image and pushes it to `ghcr.io/z3zel/wwc-backend` (tags `X.Y.Z`, `X.Y`, `latest`; prereleases get only `X.Y.Z-…`). See ADR [0013](docs/adr/0013-backend-image-publishing.md). You can also start it by hand from the Actions tab ("Backend image").
+**Released images:** publishing a GitHub Release tagged `vX.Y.Z` builds the image for `linux/amd64` and `linux/arm64/v8` and pushes it to `ghcr.io/z3zel/wwc-backend` (tags `X.Y.Z`, `X.Y`, `latest`; prereleases get only `X.Y.Z-…`). The tag must be full semver: `v1.0.0-rc.1` works, `1.0-rc.1` gets no version tag. The `sha256-…` entries in the GHCR package page are build attestations, not images to pull. See ADR [0013](docs/adr/0013-backend-image-publishing.md). You can also start it by hand from the Actions tab ("Release").
+
+**Frontend deploy:** a full (non-pre) release then calls the Render deploy hook, which rebuilds the frontend from the branch Render tracks. Store the hook URL in the `DEPLOY_HOOK` repository secret (Settings → Secrets and variables → Actions). See ADR [0015](docs/adr/0015-frontend-deploy-on-release.md).
 
 ```sh
 gh release create v0.1.0 --generate-notes      # → ghcr.io/z3zel/wwc-backend:0.1.0
@@ -87,13 +89,13 @@ Hosts that deploy an existing image (e.g. Render's "Existing Image") can use thi
 
 The env vars below are applied last. Only sections whose variables are set are touched; the full list is in `.env.example`.
 
-| Variables | What |
-|---|---|
-| `PB_S3_ENABLED`, `PB_S3_BUCKET`, `PB_S3_REGION`, `PB_S3_ENDPOINT`, `PB_S3_ACCESS_KEY`, `PB_S3_SECRET`, `PB_S3_FORCE_PATH_STYLE` | Uploaded photos on S3 (or any S3-compatible storage) |
-| `PB_BACKUPS_CRON` (default `0 3 * * *`), `PB_BACKUPS_MAX_KEEP` (default 7), optional `PB_BACKUPS_S3_*` | Scheduled backups. They go to the `PB_S3_*` bucket (at its root) unless `PB_BACKUPS_S3_*` names another one. |
-| `PB_SMTP_ENABLED`, `PB_SMTP_HOST`, `PB_SMTP_PORT`, `PB_SMTP_USERNAME`, `PB_SMTP_PASSWORD`, `PB_SMTP_TLS`, `PB_SMTP_AUTH_METHOD`, `PB_SENDER_NAME`, `PB_SENDER_ADDRESS` | Outgoing mail: account confirmation, password reset |
-| `PB_APP_URL`, `PB_APP_NAME` | Public PocketBase URL (used in email links) and the name shown in emails |
-| `PB_TRUSTED_PROXY_HEADERS` | e.g. `X-Forwarded-For` behind a proxy, so client IPs and rate limits are right |
+| Variables                                                                                                                                                              | What                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `PB_S3_ENABLED`, `PB_S3_BUCKET`, `PB_S3_REGION`, `PB_S3_ENDPOINT`, `PB_S3_ACCESS_KEY`, `PB_S3_SECRET`, `PB_S3_FORCE_PATH_STYLE`                                        | Uploaded photos on S3 (or any S3-compatible storage)                                                         |
+| `PB_BACKUPS_CRON` (default `0 3 * * *`), `PB_BACKUPS_MAX_KEEP` (default 7), optional `PB_BACKUPS_S3_*`                                                                 | Scheduled backups. They go to the `PB_S3_*` bucket (at its root) unless `PB_BACKUPS_S3_*` names another one. |
+| `PB_SMTP_ENABLED`, `PB_SMTP_HOST`, `PB_SMTP_PORT`, `PB_SMTP_USERNAME`, `PB_SMTP_PASSWORD`, `PB_SMTP_TLS`, `PB_SMTP_AUTH_METHOD`, `PB_SENDER_NAME`, `PB_SENDER_ADDRESS` | Outgoing mail: account confirmation, password reset                                                          |
+| `PB_APP_URL`, `PB_APP_NAME`                                                                                                                                            | Public PocketBase URL (used in email links) and the name shown in emails                                     |
+| `PB_TRUSTED_PROXY_HEADERS`                                                                                                                                             | e.g. `X-Forwarded-For` behind a proxy, so client IPs and rate limits are right                               |
 
 Check the S3 and SMTP settings from the dashboard (Settings → Files storage / Backups / Mail settings, "Test connection"). Settings covered by the files or env vars are reset on the next restart, so change them in the repo, not the dashboard.
 
