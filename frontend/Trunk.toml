@@ -8,3 +8,10 @@ watch = ["src", "assets", "index.html"]
 [serve]
 # The /api/ proxy to PocketBase is set with TRUNK_SERVE_PROXY_BACKEND / TRUNK_SERVE_PROXY_REWRITE
 # (see docker-compose.yml, or README for running trunk on the host).
+
+# Fill the SEO tags of index.html and write robots.txt / sitemap.xml from assets/seo.json
+# (tools/seo-gen, ARCHITECTURE §5.10).
+[[hooks]]
+stage = "post_build"
+command = "cargo"
+command_arguments = ["run", "--quiet", "--release", "-p", "seo-gen"]

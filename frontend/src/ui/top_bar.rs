@@ -31,8 +31,10 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
                 }
             };
             ui.label(RichText::new(count).color(c.top_bar_text_muted));
+            // Always takes its space, so the search field doesn't jump when it comes and goes.
+            let markers = bar_spinner.visible(state.markers_loading).show(ui, theme);
             if state.markers_loading {
-                bar_spinner.show(ui, theme).on_hover_text("Loading campsites on the map…");
+                markers.on_hover_text("Loading campsites on the map…");
             }
             ui.add_space(theme.spacing.section_gap);
             search_and_filters(ui, state, theme, narrow, actions);

@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use egui::{ImageSource, Slider, TextEdit, Ui};
+use egui::{CursorIcon, ImageSource, Slider, TextEdit, Ui};
 
 use crate::actions::Action;
 use crate::api::models::Campsite;
@@ -83,6 +83,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
                 .custom_formatter(|v, _| tent_capacity_label(v as u8))
                 .text("tents"),
         )
+        .on_hover_cursor(CursorIcon::PointingHand)
         .changed();
     field_error(ui, theme, err, "tent_capacity");
 
