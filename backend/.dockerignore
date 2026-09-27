@@ -1,0 +1,4 @@
+tests/
+seed/
+pb_data/
+**/types.d.ts

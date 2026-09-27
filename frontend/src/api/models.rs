@@ -25,6 +25,9 @@ pub struct User {
     pub email: String,
     #[serde(default)]
     pub role: String,
+    /// Email confirmed. Creating content requires it (API rules, ADR 0012).
+    #[serde(default)]
+    pub verified: bool,
 }
 
 impl User {

@@ -14,6 +14,7 @@ pub use toasts::toasts;
 
 use egui::{Button, Color32, Response, RichText, Sense, Stroke, Ui, Vec2};
 
+use crate::actions::Action;
 use crate::api::ApiError;
 use crate::ui::theme::{Theme, subheading};
 
@@ -34,6 +35,19 @@ pub fn danger_button(ui: &mut Ui, theme: &Theme, text: &str, enabled: bool) -> R
 /// Borderless text button, used for secondary actions and links between panels.
 pub fn link_button(ui: &mut Ui, theme: &Theme, text: &str) -> Response {
     ui.add(Button::new(RichText::new(text).color(theme.colors.link)).frame(false))
+}
+
+/// Shown instead of a create form while the user's email is not confirmed.
+pub fn verify_prompt(ui: &mut Ui, theme: &Theme, email: &str, what: &str, actions: &mut Vec<Action>) {
+    muted(ui, theme, format!("Confirm your email ({email}) {what}"));
+    ui.horizontal(|ui| {
+        if link_button(ui, theme, "Resend email").clicked() {
+            actions.push(Action::RequestVerification { email: email.to_owned() });
+        }
+        if link_button(ui, theme, "I've confirmed it").clicked() {
+            actions.push(Action::RefreshSession);
+        }
+    });
 }
 
 pub fn section_title(ui: &mut Ui, text: &str) {

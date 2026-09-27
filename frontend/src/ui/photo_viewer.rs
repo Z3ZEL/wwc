@@ -17,7 +17,7 @@ pub fn show(ctx: &egui::Context, state: &mut AppState, theme: &Theme) {
     if !matches!(state.panel, Some(Panel::Campsite(_))) {
         return;
     }
-    let origin = state.origin.as_str();
+    let api_base = state.api_base.as_str();
     let Some(d) = state.detail.as_mut() else { return };
     let Some(c) = d.campsite.loaded().cloned() else { return };
     let count = c.photos.len();
@@ -39,7 +39,7 @@ pub fn show(ctx: &egui::Context, state: &mut AppState, theme: &Theme) {
             let inner = screen.size() - theme.panel_margin().sum();
             ui.set_min_size(inner);
             ui.set_max_size(inner);
-            carousel(ui, theme, &c, d, index, origin)
+            carousel(ui, theme, &c, d, index, api_base)
         });
     if modal.inner || modal.should_close() {
         d.photo_open = None;
@@ -47,7 +47,7 @@ pub fn show(ctx: &egui::Context, state: &mut AppState, theme: &Theme) {
 }
 
 /// Returns true when the close button was clicked.
-fn carousel(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, index: usize, origin: &str) -> bool {
+fn carousel(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, index: usize, api_base: &str) -> bool {
     let count = c.photos.len();
     let text = theme.colors.photo_viewer_text;
     let mut close = false;
@@ -84,7 +84,7 @@ fn carousel(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, in
         }
         let image_size = vec2((ui.available_width() - arrow_width).max(0.0), main_height);
         ui.allocate_ui_with_layout(image_size, Layout::centered_and_justified(egui::Direction::TopDown), |ui| {
-            match photo_url(origin, c, &c.photos[index], PhotoSize::Large) {
+            match photo_url(api_base, c, &c.photos[index], PhotoSize::Large) {
                 Some(url) => {
                     ui.add(
                         egui::Image::new(ImageSource::Uri(Cow::Owned(url)))
@@ -109,7 +109,7 @@ fn carousel(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, in
             .photos
             .iter()
             .map(|file| Thumb {
-                source: photo_url(origin, c, file, PhotoSize::Thumb).map(|u| ImageSource::Uri(Cow::Owned(u))),
+                source: photo_url(api_base, c, file, PhotoSize::Thumb).map(|u| ImageSource::Uri(Cow::Owned(u))),
                 label: file,
             })
             .collect();

@@ -14,13 +14,21 @@ use egui::{RichText, Ui};
 use crate::actions::Action;
 use crate::state::{AppState, Panel};
 use crate::ui::theme::Theme;
-use crate::ui::widgets::{danger_button, panel_frame};
+use crate::ui::widgets::{danger_button, panel_frame, verify_prompt};
 
 pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
     let Some(panel) = state.panel.clone() else { return };
     panel_frame(ui, theme, panel.title(), state.panel_collapsed, actions, |ui, actions| {
         if state.confirm_discard.is_some() {
             discard_prompt(ui, theme, actions);
+            return;
+        }
+        // The create rules require a confirmed email (ADR 0012).
+        if matches!(panel, Panel::NewCampsite | Panel::Report(_))
+            && let Some(session) = state.session.as_ref().filter(|_| state.needs_verification())
+        {
+            let what = if panel == Panel::NewCampsite { "to add a campsite." } else { "to send a report." };
+            verify_prompt(ui, theme, &session.user.email, what, actions);
             return;
         }
         match panel {

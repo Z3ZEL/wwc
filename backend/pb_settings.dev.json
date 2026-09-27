@@ -1,0 +1,8 @@
+{
+  "rateLimits": {
+    "enabled": false
+  },
+  "logs": {
+    "maxDays": 3
+  }
+}

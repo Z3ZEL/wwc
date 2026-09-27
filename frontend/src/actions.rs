@@ -48,6 +48,10 @@ pub enum Action {
     RefreshSession,
     Login,
     Register,
+    /// Send (again) the email confirmation link.
+    RequestVerification {
+        email: String,
+    },
     Logout,
     SaveProfileName,
     ChangePassword,
@@ -116,6 +120,7 @@ pub enum Event {
         password: String,
         result: ApiResult<User>,
     },
+    VerificationRequested(ApiResult<()>),
     ProfileNameSaved(ApiResult<User>),
     PasswordChanged {
         email: String,

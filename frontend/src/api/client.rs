@@ -78,7 +78,7 @@ impl CampsiteFilter {
 
 #[derive(Debug, Clone, Default)]
 pub struct ApiClient {
-    /// Empty = same origin (Trunk proxies /api in dev).
+    /// Empty = same origin (Trunk proxies /api in dev); otherwise `config::api_url()`.
     base_url: String,
     token: Option<String>,
 }
@@ -198,6 +198,15 @@ impl ApiClient {
         let url = self.url("/api/collections/users/records", &[]);
         let body = json!({ "name": name, "email": email, "password": password, "passwordConfirm": confirm });
         self.send_json(ehttp::Method::POST, url, &body, on_done);
+    }
+
+    /// Sends the confirmation email. PocketBase answers 204 whether or not the email exists.
+    pub fn request_verification(&self, email: &str, on_done: Done<()>) {
+        let url = self.url("/api/collections/users/request-verification", &[]);
+        let body = json!({ "email": email }).to_string().into_bytes();
+        let mut req = ehttp::Request::post(url, body);
+        req.headers.insert("Content-Type", "application/json");
+        self.send_empty(req, on_done);
     }
 
     pub fn update_name(&self, user_id: &str, name: &str, on_done: Done<User>) {
@@ -428,10 +437,10 @@ impl PhotoSize {
     }
 }
 
-/// Absolute URL of a campsite photo. `origin` is the page origin (the API is same-origin):
+/// Absolute URL of a campsite photo. `api_base` is the absolute PocketBase base URL (`AppState::api_base`):
 /// egui's image loader only fetches `http(s)://` URIs. `None` if an id or the filename is
 /// not safe to put in a URL path.
-pub fn photo_url(origin: &str, campsite: &Campsite, file: &str, size: PhotoSize) -> Option<String> {
+pub fn photo_url(api_base: &str, campsite: &Campsite, file: &str, size: PhotoSize) -> Option<String> {
     let safe_file = !file.is_empty()
         && file.len() <= 255
         && !file.starts_with('.')
@@ -439,8 +448,9 @@ pub fn photo_url(origin: &str, campsite: &Campsite, file: &str, size: PhotoSize)
     // Collection ids look like `pbc_1626116840`: record-id characters plus `_`.
     let c = &campsite.collection_id;
     let safe_collection = !c.is_empty() && c.len() <= 64 && c.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
-    (safe_collection && is_record_id(&campsite.id) && safe_file)
-        .then(|| format!("{origin}/api/files/{}/{}/{file}?thumb={}", campsite.collection_id, campsite.id, size.thumb()))
+    (safe_collection && is_record_id(&campsite.id) && safe_file).then(|| {
+        format!("{api_base}/api/files/{}/{}/{file}?thumb={}", campsite.collection_id, campsite.id, size.thumb())
+    })
 }
 
 /// A boundary that appears in none of the parts. Deterministic, so the body is testable.

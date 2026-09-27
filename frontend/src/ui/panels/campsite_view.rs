@@ -11,11 +11,13 @@ use crate::state::{AppState, CampsiteDetail, Panel, Remote, tent_capacity_label}
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{
     SpinnerSize, StripStyle, Thumb, badge, danger_button, failed, form_error, link_button, loading, loading_block,
-    muted, photo_strip, primary_button, section_title, spinner, stars, stars_input, tag_chip,
+    muted, photo_strip, primary_button, section_title, spinner, stars, stars_input, tag_chip, verify_prompt,
 };
 
 pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
     let user_id = state.user_id().map(str::to_owned);
+    // Email of a logged-in user who hasn't confirmed it yet (can't rate or comment).
+    let unverified = state.session.as_ref().filter(|_| state.needs_verification()).map(|s| s.user.email.clone());
     if let Some(results) = state.search.results.loaded()
         && link_button(ui, theme, &format!("◀ Search results ({})", results.len())).clicked()
     {
@@ -39,12 +41,12 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
     };
     let is_owner = user_id.as_deref() == Some(campsite.author.as_str());
 
-    photos(ui, theme, &campsite, d, &state.origin);
+    photos(ui, theme, &campsite, d, &state.api_base);
     header(ui, theme, &campsite, d, user_id.is_some(), is_owner, actions);
     ui.add_space(theme.spacing.section_gap);
-    rating(ui, theme, d, user_id.is_some(), is_owner, actions);
+    rating(ui, theme, d, user_id.is_some(), is_owner, unverified.as_deref(), actions);
     ui.add_space(theme.spacing.section_gap);
-    comments(ui, theme, d, user_id.as_deref(), is_owner, actions);
+    comments(ui, theme, d, user_id.as_deref(), is_owner, unverified.as_deref(), actions);
 }
 
 fn header(
@@ -135,7 +137,7 @@ fn header(
 }
 
 /// Thumbnails; clicking one opens the full-page viewer (`ui::photo_viewer`).
-fn photos(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, origin: &str) {
+fn photos(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, api_base: &str) {
     if c.photos.is_empty() {
         return;
     }
@@ -143,7 +145,7 @@ fn photos(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, orig
         .photos
         .iter()
         .map(|file| Thumb {
-            source: photo_url(origin, c, file, PhotoSize::Thumb).map(|u| ImageSource::Uri(Cow::Owned(u))),
+            source: photo_url(api_base, c, file, PhotoSize::Thumb).map(|u| ImageSource::Uri(Cow::Owned(u))),
             label: file,
         })
         .collect();
@@ -154,13 +156,25 @@ fn photos(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, orig
     ui.add_space(theme.spacing.section_gap);
 }
 
-fn rating(ui: &mut Ui, theme: &Theme, d: &CampsiteDetail, logged_in: bool, is_owner: bool, actions: &mut Vec<Action>) {
+fn rating(
+    ui: &mut Ui,
+    theme: &Theme,
+    d: &CampsiteDetail,
+    logged_in: bool,
+    is_owner: bool,
+    unverified: Option<&str>,
+    actions: &mut Vec<Action>,
+) {
     if is_owner {
         return; // you can't rate your own campsite
     }
     section_title(ui, "Your rating");
     if !logged_in {
         login_prompt(ui, theme, "to rate this campsite.", actions);
+        return;
+    }
+    if let Some(email) = unverified {
+        verify_prompt(ui, theme, email, "to rate this campsite.", actions);
         return;
     }
     match &d.my_rating {
@@ -183,13 +197,15 @@ fn comments(
     d: &mut CampsiteDetail,
     user_id: Option<&str>,
     is_owner: bool,
+    unverified: Option<&str>,
     actions: &mut Vec<Action>,
 ) {
     ui.separator();
     section_title(ui, "Comments");
 
-    match user_id {
-        Some(_) if !is_owner => {
+    match (user_id, unverified) {
+        (Some(_), Some(email)) if !is_owner => verify_prompt(ui, theme, email, "to comment.", actions),
+        (Some(_), None) if !is_owner => {
             ui.add(
                 TextEdit::multiline(&mut d.comment_draft)
                     .hint_text("Share your experience…")
@@ -205,8 +221,8 @@ fn comments(
                 actions.push(Action::PostComment);
             }
         }
-        Some(_) => {}
-        None => login_prompt(ui, theme, "to comment.", actions),
+        (Some(_), _) => {}
+        (None, _) => login_prompt(ui, theme, "to comment.", actions),
     }
     ui.add_space(theme.spacing.item_spacing[1]);
 

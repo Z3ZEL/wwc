@@ -36,7 +36,8 @@ Product decisions (v0.2):
 | HTTP (wasm) | **`ehttp`** (callback based, no async runtime) | One API client module, see §5.4 |
 | Backend | **PocketBase** (single binary, SQLite) | Auth, REST API, file storage, access rules, admin UI |
 | Backend logic | PocketBase **JS migrations** (`pb_migrations/`) and **JS hooks** (`pb_hooks/`) | No custom Go build unless an ADR justifies it |
-| Dev environment | **docker compose** | Development only for now; production deployment is out of scope |
+| Dev environment | **docker compose** | Development only (§7) |
+| Production | Static bundle + PocketBase container | Frontend on any static host, PocketBase image with a `/pb_data` volume, files and backups on S3 (§7.1, ADR 0012) |
 
 ```
 ┌───────────────────────────── Browser ─────────────────────────────┐
@@ -46,7 +47,7 @@ Product decisions (v0.2):
 │   └─ AppState  ◄── Events (channel) ◄─────────┘                    │
 │   Map tiles ◄──── OSM tile server (HTTP)                           │
 └─────────────────────────────┬─────────────────────────────────────┘
-                              │ same origin in dev: /api/*  (Trunk proxy)
+                              │ dev: same origin, /api/* (Trunk proxy) · prod: WWC_API_URL + CORS
                               ▼
 ┌──────────────────────── PocketBase :8090 ─────────────────────────┐
 │  /api/collections/*   REST + auth                                  │
@@ -54,6 +55,7 @@ Product decisions (v0.2):
 │  /_/                  admin dashboard                              │
 │  pb_migrations/  (schema as code)    pb_hooks/ (server logic)      │
 │  pb_data/        (SQLite + uploads, docker volume, NOT committed)  │
+│  prod: uploads + backups on S3, SQLite on a persistent volume      │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -64,7 +66,9 @@ Product decisions (v0.2):
 ```
 wwc/
 ├── CLAUDE.md                  # Agent entry point (short, points here)
-├── docker-compose.yml         # Dev stack
+├── docker-compose.yml         # Dev stack (+ mailpit)
+├── deploy/docker-compose.prod.yml  # Production example: PocketBase + volume (§7.1)
+├── scripts/build-frontend.sh  # Production static build (WWC_API_URL=… → frontend/dist/)
 ├── .env.example               # Every env var, documented, no secrets
 ├── Cargo.toml                 # Cargo workspace root (+ release profile)
 ├── rust-toolchain.toml        # Pinned toolchain + wasm32-unknown-unknown target
@@ -80,6 +84,7 @@ wwc/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
 │       ├── lib.rs             # module tree; `app` and `map` are wasm-only
 │       ├── app.rs             # impl eframe::App — frame loop + session persistence
+│       ├── config.rs          # build-time config (WWC_API_URL)
 │       ├── actions.rs         # Action (UI intent) + Event (API result) enums
 │       ├── controller.rs      # Action -> state change / API request
 │       ├── state/             # AppState, Panel, Remote, form drafts, pure `apply(event)` + tests
@@ -93,10 +98,11 @@ wwc/
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters
 │           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider
 ├── backend/
-│   ├── Dockerfile             # Downloads a *pinned* PocketBase release
-│   ├── entrypoint.sh          # migrate, upsert dev superuser, serve
+│   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
+│   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
 │   ├── pb_migrations/         # Schema as code — committed
-│   ├── pb_hooks/              # *.pb.js server hooks — committed
+│   ├── pb_hooks/              # *.pb.js server hooks — committed (settings.pb.js: settings from files + env)
+│   ├── pb_settings.json       # Instance settings as code (rate limits, logs, batch…); pb_settings.dev.json on top in dev
 │   ├── seed/seed.sh           # Dev seed data (curl + jq)
 │   └── tests/                 # rules.sh: API rule tests (curl + jq); fixtures/ (test image)
 └── docs/
@@ -194,6 +200,7 @@ Shorthands used below (write them out in full in the real rules):
 - `AUTH` = `@request.auth.id != ""`
 - `ADMIN` = `@request.auth.role = "admin"`
 - `NOT_OWN_SITE` = `@request.body.campsite.author != @request.auth.id`
+- `VERIFIED` = `@request.auth.verified = true` — prefixes every create rule on `campsites`, `ratings`, `comments` and `reports` (§4.6); left out of the table for brevity.
 
 | Collection | list / view | create | update | delete |
 |---|---|---|---|---|
@@ -234,8 +241,8 @@ Keep hooks small, one concern per file, and documented in `docs/API.md`.
 ### 4.6 Auth
 
 - Email + password via PocketBase auth collection. OAuth2 providers (Google, GitHub…) can be enabled later with no frontend architecture change.
-- Email verification required before posting (enforce in rules with `@request.auth.verified = true`) — enable once SMTP is configured; in dev use a mail catcher (see §7).
-- Built-in rate limiting in PocketBase settings must be enabled for auth and create endpoints.
+- Email verification is required before posting: `VERIFIED` in the create rules (§4.3). Registering sends the confirmation email (`request-verification`); the link opens PocketBase's own confirmation page (`PB_APP_URL/_/#/auth/confirm-verification/…`). The UI replaces create forms with "Confirm your email" + "Resend email" / "I've confirmed it" (auth-refresh) while `verified` is false. SMTP comes from env (`pb_hooks/settings.pb.js`); in dev, mailpit catches the mail (§7).
+- Built-in rate limiting is on for auth and create endpoints (`backend/pb_settings.json`; off in dev).
 
 ---
 
@@ -398,7 +405,7 @@ Behavior:
 | **Security** | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way). |
 | **Privacy** | Never expose user emails publicly. Campsite coordinates are public by design — state this in the UI when posting. |
 | **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`. |
-| **Config** | Environment-specific values (API base URL, tile URL) come from a small config module; defaults work for the docker-compose setup with zero config. |
+| **Config** | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default). Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`). |
 | **Time** | Store UTC (PocketBase does); format in local time in the UI. |
 
 ---
@@ -409,7 +416,8 @@ Services:
 
 | Service | Purpose | Ports |
 |---|---|---|
-| `pocketbase` | Built from `backend/Dockerfile`, pinned version, runs `serve --http=0.0.0.0:8090` with automigrate enabled | `8090` (API + admin `/_/`) |
+| `pocketbase` | Built from `backend/Dockerfile`, pinned version, runs `serve --http=0.0.0.0:8090` with automigrate enabled (`PB_DEV=1`) | `8090` (API + admin `/_/`) |
+| `mailpit` | Catches the emails PocketBase sends (confirmation links) | `8025` (web UI) |
 | `frontend` | Rust image with `wasm32-unknown-unknown` + `trunk`; runs `trunk serve --address 0.0.0.0` with hot reload; proxies `/api/` to `http://pocketbase:8090/api/` | `8080` |
 
 Volumes:
@@ -422,9 +430,16 @@ Conventions:
 - A superuser for dev is created from `.env` values (`PB_ADMIN_EMAIL`, `PB_ADMIN_PASSWORD`) via `pocketbase superuser upsert` in the entrypoint. Dev credentials only; never reuse elsewhere.
 - Seed data (a few users including one `role = admin`, ~50 campsites spread on the map with varied tags and tent capacities, ratings, comments, a few open reports) via `backend/seed/`, runnable with one command (document it in the README).
 - Frontend devs may also run `trunk serve` on the host against the dockerized PocketBase, setting `TRUNK_SERVE_PROXY_BACKEND` and `TRUNK_SERVE_PROXY_REWRITE` (see README).
-- Add a mail catcher (e.g. mailpit) when email verification is turned on.
+- Seed and rule-test users are marked `verified` through the superuser API (no email round-trip).
 
-Production deployment is **out of scope** for now. Keep choices compatible with a future setup of: static wasm bundle + PocketBase behind one reverse proxy on one origin.
+### 7.1 Production (ADR 0012)
+
+- **Frontend:** `WWC_API_URL=https://api.example.com scripts/build-frontend.sh` → `frontend/dist/` (release build, wasm-opt). Host it on any static host; the API URL is baked in, so one build per environment.
+- **Backend:** the `backend/Dockerfile` image is self-contained: migrations and hooks baked in, non-root, checksum-verified PocketBase, `VOLUME /pb_data`. No `--automigrate`. `PB_ORIGINS` restricts CORS to the frontend origin.
+- **Storage:** SQLite stays on a persistent volume at `/pb_data`; uploaded files go to S3 (`PB_S3_*`) and scheduled backups to the same bucket (or `PB_BACKUPS_S3_*`). Losing the volume = restore the latest backup from the dashboard.
+- **Email:** SMTP from `PB_SMTP_*`; `PB_APP_URL` is the public PocketBase URL used in email links.
+- **Instance settings as code:** `backend/pb_settings.json` (non-secret: rate limits, logs, batch, app name) → optional `PB_SETTINGS_FILE` (per-deployment overrides) → `pb_settings.dev.json` in dev → `PB_*` env vars (secrets, per-environment values). Applied on every boot by `pb_hooks/settings.pb.js`; the dashboard is for inspection. Upload limits are field options, so they change through a migration, not settings.
+- TLS termination, domain and the host itself are left to the platform (see `deploy/docker-compose.prod.yml` for an example).
 
 ---
 
@@ -466,7 +481,7 @@ A task is done when:
 
 ## 11. Roadmap hints (not yet in scope)
 
-Full-text search (beyond the title substring search), favorites, a richer admin interface (stats, bulk actions, tag management in-app), auto-hide after N reports, marker clustering server-side, offline tile caching, OAuth providers, production deployment (reverse proxy, backups of `pb_data`, S3 storage for files), i18n.
+Full-text search (beyond the title substring search), favorites, a richer admin interface (stats, bulk actions, tag management in-app), auto-hide after N reports, marker clustering server-side, offline tile caching, OAuth providers, a custom email-confirmation page in the app, CI image publishing, i18n.
 
 ---
 
@@ -484,6 +499,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0009 — MVP simplifications: `ehttp`, eframe storage for the session, lat/lng number fields, bash rule tests.
 - 0010 — Campsite photos: file field (3 max), multipart `@jsonPayload` saves, web-sys file picker with browser-made previews, `egui_extras` image loaders.
 - 0011 — Search by name (top bar → Search panel), global map filters (tags, tent range), client-side screen-space marker clustering.
+- 0012 — Production deployment: static frontend with a build-time API URL, PocketBase image with a persistent volume, S3 for files and backups, settings from env, email verification required to post.
 
 ---
 
@@ -503,6 +519,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Search by campsite name (top bar → Search panel), global map filters (tags, tent capacity range) and marker clustering (ADR 0011).
 
 - Reports: the `reports` collection and a Report panel for campsites and comments (§5.8). Admins read them in the dashboard.
+- Email verification (required to post) with mailpit in dev, and a production setup: static frontend build, PocketBase image, S3 files and backups, SMTP (ADR 0012).
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 
@@ -511,7 +528,6 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 2. URL hash routing (§5.3).
 3. Avatar upload (reuse the photo picker and multipart client).
 4. Email change and account deletion.
-5. Email verification (+ mail catcher).
-6. Custom fonts.
-7. Narrow-screen polish.
-8. Photo extras: client-side resize before upload, protected files for hidden campsites.
+5. Custom fonts.
+6. Narrow-screen polish.
+7. Photo extras: client-side resize before upload, protected files for hidden campsites.

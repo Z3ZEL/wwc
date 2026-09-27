@@ -180,8 +180,9 @@ mod tests {
 
 #[derive(Debug, Default)]
 pub struct AppState {
-    /// Page origin, e.g. `http://localhost:8080`. Photo URLs must be absolute (see `api::photo_url`).
-    pub origin: String,
+    /// PocketBase base URL, e.g. `https://api.example.com` (the page origin when same-origin).
+    /// Photo URLs must be absolute (see `api::photo_url`).
+    pub api_base: String,
     pub session: Option<Session>,
 
     pub panel: Option<Panel>,
@@ -222,6 +223,11 @@ pub struct AppState {
 impl AppState {
     pub fn user_id(&self) -> Option<&str> {
         self.session.as_ref().map(|s| s.user.id.as_str())
+    }
+
+    /// Logged in with an unconfirmed email: reading works, creating content doesn't.
+    pub fn needs_verification(&self) -> bool {
+        self.session.as_ref().is_some_and(|s| !s.user.verified)
     }
 
     /// The campsite currently shown or edited, if any.
