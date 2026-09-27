@@ -57,7 +57,7 @@ WWC_API_URL=https://api.example.com scripts/build-frontend.sh   # → frontend/d
 sh scripts/install-frontend-tools.sh && sh scripts/build-frontend.sh
 ```
 
-Set the `WWC_API_URL` env var on the host, and use `frontend/dist` as the publish directory. The install script is idempotent: it installs rustup (in `$CARGO_HOME`, default `~/.cargo`), the toolchain from `rust-toolchain.toml`, and the pinned Trunk release, skipping what's already there.
+Set the `WWC_API_URL` env var on the host, and use `frontend/dist` as the publish directory. The install script is idempotent: it installs rustup (in `~/.cargo`), the toolchain from `rust-toolchain.toml`, and the pinned Trunk release, skipping what's already there. If the host preinstalls rustup in a read-only location (Render does), it uses that rustup but puts toolchains and tools in `~/.rustup` and `~/.cargo`.
 
 ### Backend: PocketBase image
 

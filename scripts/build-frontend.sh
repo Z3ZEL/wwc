@@ -9,7 +9,8 @@
 set -eu
 : "${WWC_API_URL:?set WWC_API_URL to the public PocketBase URL, e.g. https://api.example.com}"
 export WWC_API_URL
-PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
-cd "$(dirname "$0")/../frontend"
+cd "$(dirname "$0")/.."
+. scripts/rust-env.sh
+cd frontend
 trunk build --release --public-url "${PUBLIC_URL:-/}"
 echo "Static site ready in frontend/dist/ (API: $WWC_API_URL)"
