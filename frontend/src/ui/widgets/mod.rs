@@ -12,7 +12,7 @@ pub use range_slider::range_slider;
 pub use spinner::{Spinner, SpinnerSize, loading, loading_block, spinner};
 pub use toasts::toasts;
 
-use egui::{Button, Color32, Response, RichText, Sense, Stroke, Ui, Vec2};
+use egui::{Button, Color32, Response, RichText, Sense, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText};
 
 use crate::actions::Action;
 use crate::api::ApiError;
@@ -149,6 +149,13 @@ pub fn failed(ui: &mut Ui, theme: &Theme, error: &ApiError) -> bool {
 pub fn text_field(ui: &mut Ui, label: &str, value: &mut String, password: bool) -> Response {
     ui.label(label);
     ui.add(egui::TextEdit::singleline(value).password(password).desired_width(f32::INFINITY))
+}
+
+/// Width of a one-line button label, without the button's padding.
+pub fn text_width(ui: &Ui, text: &RichText) -> f32 {
+    let galley =
+        WidgetText::from(text.clone()).into_galley(ui, Some(TextWrapMode::Extend), f32::INFINITY, TextStyle::Button);
+    galley.size().x
 }
 
 /// True when Enter was pressed while `response` had focus.
