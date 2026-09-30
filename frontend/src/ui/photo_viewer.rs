@@ -26,7 +26,9 @@ pub fn show(ctx: &egui::Context, state: &mut AppState, theme: &Theme) {
         return;
     };
 
-    let screen = ctx.content_rect().shrink(theme.layout.photo_viewer_margin);
+    let layout = &theme.layout;
+    let margin = if theme.is_narrow(ctx) { layout.photo_viewer_margin_narrow } else { layout.photo_viewer_margin };
+    let screen = ctx.content_rect().shrink(margin);
     let frame = egui::Frame::NONE
         .fill(theme.colors.photo_viewer_bg)
         .corner_radius(theme.radius())
@@ -63,12 +65,15 @@ fn carousel(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, in
     }
     let index = d.photo_open.unwrap_or(index);
 
-    // Header: title, position, close.
+    // Header: title, then position and close on the right. A long title is truncated,
+    // so the × stays on screen (narrow screens, titles up to 100 chars).
     ui.horizontal(|ui| {
-        ui.label(RichText::new(&c.title).color(text).strong());
-        ui.label(RichText::new(format!("{} / {count}", index + 1)).color(text));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             close = ui.add(nav_button(theme, "×")).on_hover_text("Close (Esc)").clicked();
+            ui.label(RichText::new(format!("{} / {count}", index + 1)).color(text));
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(egui::Label::new(RichText::new(&c.title).color(text).strong()).truncate());
+            });
         });
     });
 

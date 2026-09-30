@@ -141,22 +141,27 @@ pub struct Shape {
 #[serde(deny_unknown_fields)]
 pub struct Layout {
     pub top_bar_height: f32,
+    /// Narrow screens: the top bar has a second row for the search field and Filters.
+    pub top_bar_height_narrow: f32,
     pub side_panel_width: f32,
     pub side_panel_min_width: f32,
     pub side_panel_max_width: f32,
     pub side_panel_collapsed_width: f32,
+    /// Minimum hit area of icon buttons (panel close/collapse/expand), sized for touch.
+    pub icon_button_size: f32,
     pub panel_animation_ms: u32,
     pub narrow_breakpoint: f32,
     pub toast_duration_ms: u32,
     /// Photo thumbnails are drawn in a 4:3 box of this height.
     pub photo_thumb_height: f32,
-    /// Gap between the full-page photo viewer and the window edges.
+    /// Gap between the full-page photo viewer and the window edges (wide / narrow screens).
     pub photo_viewer_margin: f32,
+    pub photo_viewer_margin_narrow: f32,
     /// Height of the carousel thumbnails at the bottom of the viewer.
     pub photo_viewer_thumb_height: f32,
-    /// Width of the top bar search field (wide / narrow screens).
+    /// Width of the top bar search field on wide screens; it shrinks if the bar is short
+    /// of space, and fills its row on narrow screens.
     pub search_width: f32,
-    pub search_width_narrow: f32,
     /// Two-handle range slider (tent capacity filter).
     pub range_slider_handle_radius: f32,
     pub range_slider_track_height: f32,
@@ -224,6 +229,11 @@ impl Theme {
 
     pub fn panel_margin(&self) -> Margin {
         Margin::same(self.spacing.panel_padding.round().clamp(0.0, 127.0) as i8)
+    }
+
+    /// Phones: full-width side panel and a two-row top bar (ARCHITECTURE §5.6).
+    pub fn is_narrow(&self, ctx: &egui::Context) -> bool {
+        ctx.content_rect().width() < self.layout.narrow_breakpoint
     }
 
     /// Map the theme onto egui's global style. Called once at startup.

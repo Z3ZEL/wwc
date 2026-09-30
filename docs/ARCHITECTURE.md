@@ -357,10 +357,11 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 **Top bar** (always visible, fixed height from the theme):
 
 - Left: app name/logo. Clicking it closes the panel.
-- Center: **total number of campsites** (`stats`, unfiltered), refreshed on startup and after a campsite is created or deleted. Then the **search field** (`layout.search_width`, `search_width_narrow` on narrow screens): Enter runs the search and opens the Search panel, × clears it. Then the **Filters** button, which shows the number of active filters and is filled (`tag_selected_*` colors) while any is on; it toggles the Filters panel.
+- Center: **total number of campsites** (`stats`, unfiltered), refreshed on startup and after a campsite is created or deleted. Then the **search field** (up to `layout.search_width`; it shrinks when the bar is short of space, so the right-hand buttons never get pushed off-screen): Enter runs the search and opens the Search panel, × clears it. Then the **Filters** button, which shows the number of active filters and is filled (`tag_selected_*` colors) while any is on; it toggles the Filters panel.
 - Right, logged out: **Log in**, **Sign up**. Logged in: **+ New campsite**, then the avatar/name menu (Profile, Moderation if admin, Log out).
+- **Narrow screens** (phones): the bar is `layout.top_bar_height_narrow` tall and has two rows. The first row has the logo, the count and a **☰ menu** with every account button (Log in / Sign up, or the name, + New campsite, Profile, Log out). The second row has the search field, which fills the row, and Filters.
 
-**Photo viewer** (`ui/photo_viewer.rs`): the one exception to "everything is a side panel". Clicking a campsite photo opens an egui `Modal` over the whole page (inset by `layout.photo_viewer_margin`, backdrop `colors.photo_viewer_backdrop`). It is a carousel: the current photo (`1200x1200f` thumb), fitted to the space, with ◀ ▶ on the sides (wrapping around), "n / N" and × in the header, and a thumbnail row at the bottom with the current photo outlined. ← / → browse; Esc, × or a click on the backdrop close it. State is `CampsiteDetail::photo_open`, so it closes with the Campsite panel.
+**Photo viewer** (`ui/photo_viewer.rs`): the one exception to "everything is a side panel". Clicking a campsite photo opens an egui `Modal` over the whole page (inset by `layout.photo_viewer_margin`, `photo_viewer_margin_narrow` on narrow screens, backdrop `colors.photo_viewer_backdrop`). It is a carousel: the current photo (`1200x1200f` thumb), fitted to the space, with ◀ ▶ on the sides (wrapping around), the title (truncated), "n / N" and × in the header, and a thumbnail row at the bottom with the current photo outlined. ← / → browse; Esc, × or a click on the backdrop close it. State is `CampsiteDetail::photo_open`, so it closes with the Campsite panel.
 
 **Side panels:** only one is active at a time. They share one frame: a header with the title plus a collapse button (◀/▶) and a close button (✕), and a scrollable body.
 
@@ -382,10 +383,11 @@ Behavior:
 
 - **Collapse** (◀) shrinks the panel to a thin strip and keeps its state, including unsaved form drafts. **Close** (✕) clears the panel and resets the hash to `#/`. Closing a form with unsaved changes asks for confirmation inside the panel.
 - Clicking a marker opens the Campsite panel, or switches to it if another panel is open. The selected marker is highlighted, and the map pans only if the marker is hidden behind the panel.
-- **Wide screens** (≥ `layout.narrow_breakpoint`): the panel is docked to the **right** with `layout.side_panel_width` and the user can resize it within the min/max. **Narrow screens:** the panel covers the whole map area under the top bar, and the top bar compacts (the count stays, the buttons move into a ☰ menu).
+- **Wide screens** (≥ `layout.narrow_breakpoint`): the panel is docked to the **right** with `layout.side_panel_width` and the user can resize it within the min/max. **Narrow screens:** the panel covers the whole map area under the top bar, and the top bar compacts (see above). The panel can still be collapsed (▶) to uncover the map, e.g. to tap the new campsite's location; the campsite form's hint says so. Use `Theme::is_narrow` to test for narrow screens.
+- The panel's icon buttons (collapse, close, expand) have a hit area of at least `layout.icon_button_size`, for touch.
 - The panel slides open and closed, and slides to and from its collapsed strip, over `layout.panel_animation_ms` (`widgets::panel_frame`, egui `Panel::show_switched`). Use 0 to turn animation off. Dragging the resize edge all the way in (or double-clicking it) collapses the panel.
 - Clickable widgets show a pointer cursor: every `Button` through `Visuals::interact_cursor` (set in `Theme::apply`), and custom widgets, radios and sliders set it themselves.
-- Errors appear as toasts at the bottom-left of the map area, or inline in forms.
+- Errors appear as toasts at the bottom-left of the map area, or inline in forms. Long toast messages wrap, and a toast is never wider than the window.
 
 **Map footer** (`ui/footer.rs`): a small strip at the bottom-right of the map (an egui `Area` constrained to the map rect, so it follows the docked panel's edge): the short titles of the documents marked `footer` in `documents.json` (Terms · Privacy · Legal notice), "Privacy choices" once consent is enabled (§5.12), then "© OpenStreetMap contributors". Documents open in the Document panel; the attribution opens openstreetmap.org/copyright in a new tab. Colors `map.colors.attribution_*`, padding `spacing.map_footer_padding`. Hidden while a panel covers the whole map (narrow screens).
 
@@ -422,7 +424,7 @@ Behavior:
 - No hard-coded style values (§5.7). If you need a new value, add it to `theme.json` **and** `Theme`, with a sensible name.
 - No browser dialogs (`alert`/`confirm`). Confirmations are shown inside the panel.
 - Remote data that is loading uses the themed spinner in `ui/widgets/spinner.rs`, never `ui.spinner()`: `loading_block` for the main content of a panel (campsite, search results, first page of comments), `loading` (inline, with a label) for a section inside a panel, and `Spinner` with a color override on non-panel backgrounds such as the top bar (campsite count, markers being fetched). A spinner that comes and goes inside a row of widgets uses `Spinner::visible(false)` rather than not being drawn, so it keeps its space and the row doesn't shift (top bar: markers being fetched). A value being refreshed keeps showing its last loaded value rather than going back to a spinner (campsite count).
-- Icon characters must exist in egui's default fonts, or they render as an empty box. Use the ones already in the UI: `×` (close, U+00D7, not `✕`), `◀` `▶` `★` `⛺`, `•` (Markdown list bullets).
+- Icon characters must exist in egui's default fonts, or they render as an empty box. Use the ones already in the UI: `×` (close, U+00D7, not `✕`), `◀` `▶` `★` `⛺` `☰` `•` (Markdown list bullets).
 - Client-side validation mirrors PocketBase field constraints for UX, but the server remains authoritative.
 
 ### 5.10 SEO (`frontend/assets/seo.json`)
@@ -600,6 +602,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Campsite photos: up to 3 per campsite, uploaded from the campsite form, shown in the Campsite panel (ADR 0010).
 - All API rules plus the rule-test script, seed script and docker compose stack.
 - Search by campsite name (top bar → Search panel), global map filters (tags, tent capacity range) and marker clustering (ADR 0011).
+- Narrow screens (phones): two-row top bar with a ☰ account menu, collapsible full-width panel, touch-sized panel buttons, toasts and photo viewer that fit the window.
 
 - Reports: the `reports` collection and a Report panel for campsites and comments (§5.8). Admins read them in the dashboard.
 - Email verification (required to post) with mailpit in dev, and a production setup: static frontend build, PocketBase image, S3 files and backups, SMTP (ADR 0012).
@@ -616,6 +619,11 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 3. Avatar upload (reuse the photo picker and multipart client).
 4. Email change and account deletion.
 5. Custom fonts.
+   <<<<<<< HEAD
 6. Narrow-screen polish.
 7. Photo extras: client-side resize before upload, protected files for hidden campsites.
 8. Legal follow-ups (§5.11): record Terms acceptance on the server (a `terms_accepted_at` field set at sign-up, and re-acceptance when the Terms change), self-service data export and account deletion (with item 4), strip photo metadata (EXIF, GPS) before upload (the resize of item 7 does it), an illegal-content notice form for visitors without an account (email for now), a bold font for documents.
+   \=======
+9. Photo extras: client-side resize before upload, protected files for hidden campsites.
+
+> > > > > > > origin/master
