@@ -1,0 +1,49 @@
+{
+  "vars": {
+    "operator_name": "Esteban Rodriguez",
+    "operator_address": "Lausanne",
+    "operator_country": "Switzerland",
+    "contact_email": "contact@rodriguez-esteban.com",
+    "contact_languages": "English",
+    "supervisory_authority": "European Data Protection Board (https://edpb.europa.eu/)",
+    "frontend_host": "Render Services, Inc., San Francisco, CA, USA (https://render.com)",
+    "backend_host": "Private server hosted in Switzerland",
+    "storage_provider": "AWS S3 (https://aws.amazon.com/s3/)",
+    "email_provider": "OVH (https://www.ovh.com)",
+    "min_age": "16",
+    "log_retention_days": "14",
+    "backup_retention_days": "7"
+  },
+  "documents": [
+    {
+      "id": "terms",
+      "title": "Terms of Use",
+      "short_title": "Terms",
+      "file": "terms.md",
+      "updated": "2026-09-29",
+      "footer": true
+    },
+    {
+      "id": "privacy",
+      "title": "Privacy Policy",
+      "short_title": "Privacy",
+      "file": "privacy.md",
+      "updated": "2026-09-29",
+      "footer": true
+    },
+    {
+      "id": "legal",
+      "title": "Legal Notice",
+      "short_title": "Legal notice",
+      "file": "legal-notice.md",
+      "updated": "2026-09-29",
+      "footer": true
+    },
+    {
+      "id": "credits",
+      "title": "Credits and licenses",
+      "file": "credits.md",
+      "updated": "2026-09-29"
+    }
+  ]
+}

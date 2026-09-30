@@ -80,7 +80,9 @@
     "panel_padding": 16.0,
     "section_gap": 20.0,
     "top_bar_padding": [16.0, 0.0],
-    "photo_gap": 6.0
+    "photo_gap": 6.0,
+    "list_indent": 14.0,
+    "map_footer_padding": [6.0, 2.0]
   },
 
   "shape": {
@@ -112,7 +114,8 @@
     "spinner_size_inline": 16.0,
     "spinner_size_block": 32.0,
     "spinner_stroke": 2.5,
-    "spinner_period_ms": 900
+    "spinner_period_ms": 900,
+    "notice_max_width": 480.0
   },
 
   "map": {

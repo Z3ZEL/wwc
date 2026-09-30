@@ -1,12 +1,17 @@
 //! Turns `Action`s into state changes and API requests. API callbacks send an `Event`
 //! into the channel drained by the app every frame (ARCHITECTURE §5.2).
 
+use std::collections::BTreeSet;
 use std::sync::mpsc::Sender;
 
-use crate::actions::{Action, ApiResult, Event, ToastKind};
+use crate::actions::{Action, ApiResult, ConsentChoice, Event, ToastKind};
 use crate::api::models::ReportTarget;
-use crate::api::{ApiClient, ApiError, CampsiteFilter, Done, clean_search};
-use crate::state::{AppState, CampsiteDetail, CampsiteForm, Panel, Remote, ReportForm, Search, TENT_CAPACITY_MAX};
+use crate::api::{ApiClient, ApiError, CampsiteFilter, Done, clean_search, fetch_text};
+use crate::consent::{self, ConsentRecord};
+use crate::documents::{self, PRIVACY};
+use crate::state::{
+    AppState, CampsiteDetail, CampsiteForm, ConsentPanel, Panel, Remote, ReportForm, Search, TENT_CAPACITY_MAX,
+};
 
 pub struct Controller {
     api: ApiClient,
@@ -134,9 +139,9 @@ impl Controller {
             }
             Action::Register => {
                 let f = &mut state.register;
-                if f.password != f.confirm {
-                    let fields = [("passwordConfirm".to_owned(), "Passwords don't match.".to_owned())].into();
-                    f.error = Some(ApiError::validation(fields));
+                let errors = f.validate();
+                if !errors.is_empty() {
+                    f.error = Some(ApiError::validation(errors));
                     return;
                 }
                 f.submitting = true;
@@ -277,6 +282,26 @@ impl Controller {
                 self.api.create_report(&input, self.done(Event::ReportSent));
             }
 
+            Action::LoadDocument(id) => self.load_document(state, &id),
+            Action::DismissNotice => {
+                state.notice_seen = documents::manifest().get(PRIVACY).map(|d| d.updated.clone());
+            }
+            Action::OpenConsent => {
+                let choices = state.consent.as_ref().map(|r| r.granted.clone()).unwrap_or_default();
+                state.consent_panel = ConsentPanel { reopened: true, customizing: true, choices };
+            }
+            Action::CloseConsent => state.consent_panel = ConsentPanel::default(),
+            Action::SaveConsent(choice) => {
+                let config = consent::config();
+                let granted = match choice {
+                    ConsentChoice::AcceptAll => config.purpose_ids(),
+                    ConsentChoice::RejectAll => BTreeSet::new(),
+                    ConsentChoice::Selected => state.consent_panel.choices.clone(),
+                };
+                state.consent = Some(ConsentRecord::new(config, &granted, now_ms()));
+                state.consent_panel = ConsentPanel::default();
+            }
+
             Action::Toast(text, kind) => state.toast(kind, text),
         }
     }
@@ -323,8 +348,16 @@ impl Controller {
             other => other,
         };
 
-        if !matches!(target, Some(Panel::Login | Panel::Register)) {
+        // Reading a document (e.g. the Terms from the sign-up form) doesn't abandon the login detour.
+        if !matches!(target, Some(Panel::Login | Panel::Register | Panel::Document(_))) {
             state.after_login = None; // the login detour was abandoned
+        }
+        // A document offers a way back to where it was opened from, even after following
+        // links to other documents.
+        match (&target, &state.panel) {
+            (Some(Panel::Document(_)), Some(Panel::Document(_))) => {}
+            (Some(Panel::Document(_)), from) => state.document_back = from.clone(),
+            _ => state.document_back = None,
         }
 
         match &target {
@@ -361,11 +394,18 @@ impl Controller {
                 };
                 state.report = ReportForm::new(campsite_id);
             }
+            Some(Panel::Document(id)) => {
+                if !matches!(state.documents.get(id), Some(Remote::Loaded(_) | Remote::Loading)) {
+                    self.load_document(state, id);
+                }
+            }
             Some(Panel::Search | Panel::Filters) | None => {}
         }
 
-        // The Report panel shows a preview of the target from the open campsite.
-        if !matches!(target, Some(Panel::Campsite(_) | Panel::EditCampsite(_) | Panel::Report(_))) {
+        // The Report panel shows a preview of the target from the open campsite. A document
+        // keeps it too, so its back link can return to a report.
+        if !matches!(target, Some(Panel::Campsite(_) | Panel::EditCampsite(_) | Panel::Report(_) | Panel::Document(_)))
+        {
             state.detail = None;
         }
         state.panel = target;
@@ -392,6 +432,18 @@ impl Controller {
             None => d.my_rating = Remote::Loaded(None),
         }
         state.detail = Some(d);
+    }
+
+    fn load_document(&self, state: &mut AppState, id: &str) {
+        let Some(info) = documents::manifest().get(id) else {
+            let missing =
+                ApiError { status: 404, message: "This page doesn't exist.".into(), fields: Default::default() };
+            state.documents.insert(id.to_owned(), Remote::Failed(missing));
+            return;
+        };
+        state.documents.insert(id.to_owned(), Remote::Loading);
+        let cb = id.to_owned();
+        fetch_text(&info.url(), self.done(move |result| Event::Document { id: cb, result }));
     }
 
     fn fetch_comments(&self, id: &str, page: u32) {
@@ -440,5 +492,123 @@ impl Controller {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = max;
+    }
+}
+
+/// Wall-clock time in ms since the Unix epoch (when a consent choice was made).
+fn now_ms() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        crate::web::now_ms()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64() * 1000.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+
+    use super::*;
+    use crate::documents::TERMS;
+
+    /// These tests only take paths that make no request.
+    fn controller() -> Controller {
+        let (tx, _rx) = mpsc::channel();
+        Controller::new(ApiClient::new(""), tx, egui::Context::default())
+    }
+
+    fn with_documents() -> AppState {
+        let mut state = AppState::default();
+        for id in [TERMS, PRIVACY] {
+            state.documents.insert(id.to_owned(), Remote::Loaded(vec![]));
+        }
+        state
+    }
+
+    #[test]
+    fn documents_link_back_to_the_signup_form_and_keep_it() {
+        let mut c = controller();
+        let mut state = with_documents();
+        c.handle(&mut state, Action::OpenPanel(Panel::Register));
+        state.register.email = "a@example.com".into();
+
+        c.handle(&mut state, Action::OpenPanel(Panel::Document(TERMS.into())));
+        assert_eq!(state.document_back, Some(Panel::Register));
+        // Following a link to another document keeps the way back.
+        c.handle(&mut state, Action::OpenPanel(Panel::Document(PRIVACY.into())));
+        assert_eq!(state.document_back, Some(Panel::Register));
+
+        c.handle(&mut state, Action::OpenPanel(Panel::Register));
+        assert_eq!(state.document_back, None);
+        assert_eq!(state.register.email, "a@example.com");
+    }
+
+    #[test]
+    fn reading_a_document_keeps_the_login_detour() {
+        let mut c = controller();
+        let mut state = with_documents();
+        c.handle(&mut state, Action::OpenPanel(Panel::NewCampsite));
+        assert_eq!(state.panel, Some(Panel::Login));
+        c.handle(&mut state, Action::OpenPanel(Panel::Document(TERMS.into())));
+        c.handle(&mut state, Action::OpenPanel(Panel::Login));
+        assert_eq!(state.after_login, Some(Panel::NewCampsite));
+    }
+
+    #[test]
+    fn unknown_documents_fail_without_a_request() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        c.handle(&mut state, Action::OpenPanel(Panel::Document("nope".into())));
+        assert!(matches!(state.documents.get("nope"), Some(Remote::Failed(e)) if e.is_not_found()));
+    }
+
+    #[test]
+    fn signup_needs_the_terms() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        state.register.password = "password1".into();
+        state.register.confirm = "password1".into();
+        c.handle(&mut state, Action::Register);
+        assert!(!state.register.submitting);
+        assert!(state.register.error.as_ref().and_then(|e| e.field("terms")).is_some());
+    }
+
+    #[test]
+    fn dismissing_the_notice_remembers_the_policy_version() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        c.handle(&mut state, Action::DismissNotice);
+        let version = documents::manifest().get(PRIVACY).map(|d| d.updated.clone());
+        assert!(version.is_some());
+        assert_eq!(state.notice_seen, version);
+    }
+
+    #[test]
+    fn consent_choices_are_saved_and_can_be_changed() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        let all = consent::config().purpose_ids();
+
+        c.handle(&mut state, Action::SaveConsent(ConsentChoice::AcceptAll));
+        assert_eq!(state.consent.as_ref().map(|r| &r.granted), Some(&all));
+        assert_eq!(state.consent.as_ref().map(|r| r.version.as_str()), Some(consent::config().version.as_str()));
+
+        // Reopened from the footer: the current choice is ticked, and it can be withdrawn.
+        c.handle(&mut state, Action::OpenConsent);
+        assert!(state.consent_panel.reopened && state.consent_panel.customizing);
+        assert_eq!(state.consent_panel.choices, all);
+        state.consent_panel.choices.clear();
+        c.handle(&mut state, Action::SaveConsent(ConsentChoice::Selected));
+        assert_eq!(state.consent.as_ref().map(|r| r.granted.len()), Some(0));
+        assert_eq!(state.consent_panel, ConsentPanel::default());
+
+        c.handle(&mut state, Action::OpenConsent);
+        c.handle(&mut state, Action::CloseConsent);
+        assert!(!state.consent_panel.reopened);
+        c.handle(&mut state, Action::SaveConsent(ConsentChoice::RejectAll));
+        assert!(state.consent.as_ref().is_some_and(|r| r.granted.is_empty()));
     }
 }

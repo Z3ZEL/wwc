@@ -437,6 +437,22 @@ impl PhotoSize {
     }
 }
 
+/// GET a text file served next to the app (a document), not a PocketBase call: no auth header.
+/// An HTML answer means the host served its fallback page instead of the file.
+pub fn fetch_text(url: &str, on_done: Done<String>) {
+    ehttp::fetch(ehttp::Request::get(url), move |result| {
+        on_done(result.map_err(ApiError::network).and_then(|resp| {
+            if !resp.ok {
+                return Err(ApiError::from_response(resp.status, &resp.bytes));
+            }
+            if resp.content_type().is_some_and(|t| t.starts_with("text/html")) {
+                return Err(ApiError::from_response(404, b""));
+            }
+            String::from_utf8(resp.bytes).map_err(|e| ApiError::network(format!("bad response: {e}")))
+        }))
+    });
+}
+
 /// Absolute URL of a campsite photo. `api_base` is the absolute PocketBase base URL (`AppState::api_base`):
 /// egui's image loader only fetches `http(s)://` URIs. `None` if an id or the filename is
 /// not safe to put in a URL path.

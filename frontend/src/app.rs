@@ -8,14 +8,19 @@ use crate::actions::{Action, Event};
 use crate::api::ApiClient;
 use crate::api::models::Session;
 use crate::config;
+use crate::consent::{self, ConsentRecord};
 use crate::controller::Controller;
 use crate::map::MapView;
 use crate::seo::SeoTitles;
 use crate::state::{self, AppState};
 use crate::ui::theme::Theme;
-use crate::ui::{panels, photo_viewer, top_bar, widgets};
+use crate::ui::{consent_panel, footer, notice, panels, photo_viewer, top_bar, widgets};
 
+/// Browser storage keys (localStorage), all listed in the Privacy Policy. `wwc_consent` is
+/// only used while consent is enabled (§5.12).
 const SESSION_KEY: &str = "wwc_session";
+const NOTICE_KEY: &str = "wwc_notice";
+const CONSENT_KEY: &str = "wwc_consent";
 
 pub struct WwcApp {
     state: AppState,
@@ -46,6 +51,14 @@ impl WwcApp {
         let state = AppState {
             api_base,
             session: cc.storage.and_then(|s| eframe::get_value::<Option<Session>>(s, SESSION_KEY)).flatten(),
+            notice_seen: cc.storage.and_then(|s| eframe::get_value::<Option<String>>(s, NOTICE_KEY)).flatten(),
+            // An outdated or expired choice is dropped: the visitor is asked again.
+            consent: cc
+                .storage
+                .filter(|_| consent::config().enabled)
+                .and_then(|s| eframe::get_value::<Option<ConsentRecord>>(s, CONSENT_KEY))
+                .flatten()
+                .filter(|r| consent::config().is_current(r, crate::web::now_ms())),
             ..Default::default()
         };
         let map = MapView::new(&cc.egui_ctx, &theme);
@@ -69,9 +82,23 @@ impl eframe::App for WwcApp {
 
         top_bar::show(ui, state, theme, &mut actions);
         panels::show(ui, state, theme, &mut actions);
-        egui::CentralPanel::default()
+        let map_rect = egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme.colors.background))
-            .show(ui, |ui| map.show(ui, state, theme, &mut actions));
+            .show(ui, |ui| map.show(ui, state, theme, &mut actions))
+            .response
+            .rect;
+        // On narrow screens an open panel covers the map (egui still leaves it a sliver).
+        let narrow = ui.ctx().content_rect().width() < theme.layout.narrow_breakpoint;
+        if !(narrow && state.panel.is_some()) {
+            let footer = footer::show(ui.ctx(), map_rect, theme, &mut actions);
+            let above_footer = footer.map_or(map_rect, |f| map_rect.with_max_y(f.top()));
+            // Once consent is enabled, its panel replaces the notice (which says there are no analytics).
+            if consent::config().enabled {
+                consent_panel::show(ui.ctx(), above_footer, state, theme, &mut actions);
+            } else {
+                notice::show(ui.ctx(), above_footer, state, theme, &mut actions);
+            }
+        }
         photo_viewer::show(ui.ctx(), state, theme);
         widgets::toasts(ui.ctx(), theme, &mut state.toasts);
 
@@ -88,6 +115,10 @@ impl eframe::App for WwcApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, SESSION_KEY, &self.state.session);
+        eframe::set_value(storage, NOTICE_KEY, &self.state.notice_seen);
+        if consent::config().enabled {
+            eframe::set_value(storage, CONSENT_KEY, &self.state.consent);
+        }
     }
 
     fn auto_save_interval(&self) -> Duration {

@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "version": "2026-09-30",
+  "max_age_days": 180,
+  "purposes": [
+    {
+      "id": "analytics",
+      "title": "Audience measurement",
+      "description": "Counts visits and the pages opened, to understand how the site is used and improve it. No advertising, no tracking across other sites."
+    }
+  ]
+}

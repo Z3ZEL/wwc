@@ -1,11 +1,13 @@
 //! Reusable widgets. They know nothing about `AppState`: plain inputs, plain outputs.
 
+mod markdown;
 mod panel_frame;
 mod photo_strip;
 mod range_slider;
 mod spinner;
 mod toasts;
 
+pub use markdown::markdown;
 pub use panel_frame::panel_frame;
 pub use photo_strip::{PhotoStripResponse, StripStyle, Thumb, photo_strip};
 pub use range_slider::range_slider;

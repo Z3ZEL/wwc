@@ -1,6 +1,6 @@
 # Architecture Guidelines
 
-> Status: **v0.6** (2026-09-26). This is the reference that agents and humans follow when building the app.
+> Status: **v0.7** (2026-09-29). This is the reference that agents and humans follow when building the app.
 > The MVP is implemented. §13 lists what exists and what is deferred.
 > If you need to break a rule here, update this document in the same change and explain why in an ADR (see §12).
 
@@ -81,6 +81,8 @@ wwc/
 │   ├── assets/theme.json      # ALL colors, fonts, sizes, spacing — see §5.7
 │   ├── assets/seo.json        # ALL SEO text and settings — see §5.10
 │   ├── assets/seo/            # favicon.svg, og-image.svg/.png (social preview)
+│   ├── assets/documents/      # Markdown documents shown in the app (legal pages…) + documents.json — see §5.11
+│   ├── assets/consent.json    # Consent panel settings and purposes (disabled until analytics exist) — see §5.12
 │   ├── tests/fixtures/        # Recorded PocketBase JSON for DTO tests
 │   └── src/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
@@ -94,13 +96,19 @@ wwc/
 │       ├── map/               # view.rs: walkers map, markers, draft pin, viewport → bbox (wasm only)
 │       │                      # cluster.rs: pure screen-space marker clustering (host-tested)
 │       ├── seo.rs             # browser tab title from seo.json
+│       ├── documents/         # documents.json manifest + vars, Markdown → blocks parser (host-tested)
+│       ├── consent.rs         # consent.json + consent records: validity, expiry, `allows` (host-tested)
 │       ├── web/               # browser APIs egui lacks (photo file picker, document title), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
-│           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters
-│           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider
+│           ├── footer.rs      # map footer: legal links + OSM attribution
+│           ├── notice.rs      # privacy notice at the bottom of the map
+│           ├── consent_panel.rs # consent panel (replaces the notice once consent is enabled)
+│           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters, document
+│           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider, markdown
 ├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
+│                              # (+ warns about placeholder values in documents.json)
 ├── backend/
 │   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
 │   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
@@ -298,11 +306,11 @@ Rules:
 
 ### 5.3 State shape (starting point)
 
-See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `toasts`.
+See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `toasts`.
 The walkers tile cache and map memory are not in `AppState`; they live in `map::MapView`, owned by the app.
 
 - **Routing (not implemented yet — panel state is in memory only):** there is one page (the map). The "route" is the active side panel. Sync `panel` with the URL hash so links are shareable and back/forward work: `#/` (none), `#/login`, `#/register`, `#/profile`, `#/new`, `#/campsite/<id>`, `#/campsite/<id>/edit`, `#/moderation`. Read the hash on startup. Unknown hash → `#/`. An auth-only panel opened while logged out → login panel, then back to the requested panel after login.
-- **Persistence:** only the auth session goes to `localStorage`, through eframe's storage (`App::save`, key `wwc_session`, saved every 2 s). The token is refreshed on startup. Never persist passwords.
+- **Persistence:** only two keys go to `localStorage`, through eframe's storage (`App::save`, saved every 2 s): `wwc_session` (the auth session) and `wwc_notice` (`notice_seen`). A third, `wwc_consent`, is only read and written once consent is enabled (§5.12). The token is refreshed on startup. Never persist passwords. Both keys are strictly necessary, which is why the app needs no consent banner (§5.11): **a new key must be justified the same way and added to the Privacy Policy**, and anything non-essential (analytics…) would need a consent mechanism first.
 
 ### 5.4 API client (`api/`)
 
@@ -316,7 +324,7 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 
 ### 5.5 Map (`map/`)
 
-- Use `walkers` with an OSM tile source in dev. Always render **tile attribution** ("© OpenStreetMap contributors").
+- Use `walkers` with an OSM tile source in dev. Always render **tile attribution** ("© OpenStreetMap contributors"): it is in the map footer (`ui/footer.rs`, §5.6), next to the legal links.
 - The public OSM tile server has a strict usage policy: fine for dev, **not for production** — switching provider is a config change in `map/`, nothing else.
 - Markers are painted in the `Map::show` closure (`map/view.rs`); clicking one emits `Action::OpenPanel(Panel::Campsite(id))`. Markers are colored by state: normal, your own, selected.
 - **Clustering** (`map/cluster.rs`): below `map.cluster_max_zoom`, markers closer than `map.cluster_distance` points on screen are drawn as one circle with a count (radius `cluster_radius`…`cluster_radius_max`). Clicking a cluster centers on it and zooms in by `cluster_zoom_step`. The selected campsite is always drawn alone. The grouping only uses relative screen positions, so panning doesn't change it.
@@ -360,8 +368,8 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 | Panel          | Hash                   | Access     | Content                                                                                                                                                                                                                                                             |
 | -------------- | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Login          | `#/login`              | logged out | email, password, link to Register                                                                                                                                                                                                                                   |
-| Register       | `#/register`           | logged out | display name, email, password + confirm, link to Login                                                                                                                                                                                                              |
-| Profile        | `#/profile`            | logged in  | display name, avatar, change email (PocketBase email-change flow), change password (needs old password), log out, delete account (confirmation typed inside the panel, no browser dialogs)                                                                          |
+| Register       | `#/register`           | logged out | display name, email, password + confirm, a "minimum age + Terms of Use" checkbox (required) with links to the Terms and the Privacy Policy (§5.11), link to Login                                                                                                   |
+| Profile        | `#/profile`            | logged in  | display name, avatar, change email (PocketBase email-change flow), change password (needs old password), "Your data" (points to the Privacy Policy for export and deletion), log out, delete account (confirmation typed inside the panel, no browser dialogs)      |
 | New campsite   | `#/new`                | logged in  | form from §5.5, draft pin on the map                                                                                                                                                                                                                                |
 | Campsite       | `#/campsite/<id>`      | public     | photos (thumbnail strip; a click opens the photo viewer, see below), title, author, stats, tags, tent capacity, coordinates (copy button), description, rating widget (not on your own campsite), comments + comment box, Report buttons; Edit/Delete if it's yours |
 | Edit campsite  | `#/campsite/<id>/edit` | owner      | same form as New campsite, prefilled                                                                                                                                                                                                                                |
@@ -369,6 +377,7 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 | Moderation     | `#/moderation`         | admin      | §5.8                                                                                                                                                                                                                                                                |
 | Search results | `#/search`             | public     | the submitted query, a note when filters are on, matching campsite names (50 max, "showing 50 of N"). A click centers the map on the campsite and opens it; the Campsite panel then shows "◀ Search results" to come back                                           |
 | Filters        | `#/filters`            | public     | §5.5                                                                                                                                                                                                                                                                |
+| Document       | — (no route)           | public     | a Markdown document from `assets/documents/` (§5.11): "◀ <previous panel>" back link when opened from another panel, "Last updated", the text, links to the other footer documents                                                                                  |
 
 Behavior:
 
@@ -379,6 +388,10 @@ Behavior:
 - The panel slides open and closed, and slides to and from its collapsed strip, over `layout.panel_animation_ms` (`widgets::panel_frame`, egui `Panel::show_switched`). Use 0 to turn animation off. Dragging the resize edge all the way in (or double-clicking it) collapses the panel.
 - Clickable widgets show a pointer cursor: every `Button` through `Visuals::interact_cursor` (set in `Theme::apply`), and custom widgets, radios and sliders set it themselves.
 - Errors appear as toasts at the bottom-left of the map area, or inline in forms. Long toast messages wrap, and a toast is never wider than the window.
+
+**Map footer** (`ui/footer.rs`): a small strip at the bottom-right of the map (an egui `Area` constrained to the map rect, so it follows the docked panel's edge): the short titles of the documents marked `footer` in `documents.json` (Terms · Privacy · Legal notice), "Privacy choices" once consent is enabled (§5.12), then "© OpenStreetMap contributors". Documents open in the Document panel; the attribution opens openstreetmap.org/copyright in a new tab. Colors `map.colors.attribution_*`, padding `spacing.map_footer_padding`. Hidden while a panel covers the whole map (narrow screens).
+
+**Privacy notice** (`ui/notice.rs`): a card at the bottom-center of the map, above the footer, until the user clicks "Got it" (§5.11).
 
 ### 5.7 Theme (`frontend/assets/theme.json`)
 
@@ -411,7 +424,7 @@ Behavior:
 - No hard-coded style values (§5.7). If you need a new value, add it to `theme.json` **and** `Theme`, with a sensible name.
 - No browser dialogs (`alert`/`confirm`). Confirmations are shown inside the panel.
 - Remote data that is loading uses the themed spinner in `ui/widgets/spinner.rs`, never `ui.spinner()`: `loading_block` for the main content of a panel (campsite, search results, first page of comments), `loading` (inline, with a label) for a section inside a panel, and `Spinner` with a color override on non-panel backgrounds such as the top bar (campsite count, markers being fetched). A spinner that comes and goes inside a row of widgets uses `Spinner::visible(false)` rather than not being drawn, so it keeps its space and the row doesn't shift (top bar: markers being fetched). A value being refreshed keeps showing its last loaded value rather than going back to a spinner (campsite count).
-- Icon characters must exist in egui's default fonts, or they render as an empty box. Use the ones already in the UI: `×` (close, U+00D7, not `✕`), `◀` `▶` `★` `⛺` `☰`.
+- Icon characters must exist in egui's default fonts, or they render as an empty box. Use the ones already in the UI: `×` (close, U+00D7, not `✕`), `◀` `▶` `★` `⛺` `☰` `•` (Markdown list bullets).
 - Client-side validation mirrors PocketBase field constraints for UX, but the server remains authoritative.
 
 ### 5.10 SEO (`frontend/assets/seo.json`)
@@ -421,10 +434,42 @@ The UI is a canvas, so search engines and link-preview scrapers only see the sta
 - **Every SEO value lives in `seo.json`**: site URL, name, language and locale, title (≤ 60 chars), description (70–160), robots, favicon, Open Graph / Twitter card image, schema.org data, the text of the crawlable page, sitemap paths and robots.txt disallows. Never put SEO tags straight into `index.html`.
 - **`tools/seo-gen`** (host binary, workspace member) runs as a Trunk `post_build` hook, in `trunk serve` and `trunk build` alike. It validates `seo.json` (a bad value fails the build) and fills the markers of the staged `index.html`: `lang="seo:lang"`, `<!-- seo:head -->` (title, description, robots, canonical, `theme-color`, favicon, `og:*`, `twitter:*`, JSON-LD `WebSite` + `WebApplication`, page background/text colors) and `<!-- seo:body -->`. It also writes `robots.txt` and `sitemap.xml` and copies the images from `assets/seo/` to the site root. Colors come from `theme.json`.
 - **`<main id="about">`** is real content that describes the app: a heading, an intro and the feature list. Crawlers and no-JS browsers read it, and the canvas covers it once the app runs. Keep it truthful to what the app shows, because hidden or keyword-stuffed text is penalized as cloaking.
-- **Placeholder domain:** while `site_url` is `https://example.com`, the build prints a warning. Set the real domain before deploying.
+- **Placeholder domain:** while `site_url` is `https://example.com`, the build prints a warning. Set the real domain before deploying. `seo-gen` also warns while `assets/documents/documents.json` has placeholder vars (§5.11).
 - **Images:** `og-image.png` (1200×630, PNG because scrapers don't read SVG) is rendered from `og-image.svg`; the command is in the SVG.
 - **At runtime** the app only updates the tab title (`seo.rs`, applied in `app.rs`): the campsite name or panel title, then `· site_name`.
 - Only `/` is indexable: panels live in the URL hash, which search engines ignore. Per-campsite pages are future work (ADR 0012).
+
+### 5.11 Documents and legal pages (`frontend/assets/documents/`)
+
+Long texts shown in the app are Markdown files in `frontend/assets/documents/`, listed in `documents.json`: today the Terms of Use, Privacy Policy, Legal Notice and Credits; tomorrow any guide, FAQ or changelog (ADR 0016).
+
+- **Manifest** (`documents.json`, compiled in, `src/documents/mod.rs`): `vars`, and `documents` with `id`, `title`, optional `short_title` (footer link text), `file`, `updated` (`YYYY-MM-DD`) and `footer` (linked from the map footer, in manifest order). `documents::TERMS` and `PRIVACY` are the ids the code links to.
+- **Files are fetched, not compiled in.** `index.html` copies the folder next to the app (Trunk `copy-dir`). Opening a document fetches `documents/<file>?v=<updated>` once per session (`api::fetch_text` → `Event::Document`, kept parsed in `AppState::documents`), so documents cost nothing in the wasm bundle and can be long. `?v=` changes with `updated`, so no cache serves an old version: **bump `updated` with every change readers can see** (it is also the "Last updated" date shown; editing an HTML comment doesn't count). An HTML response (a static host's SPA fallback for a missing file) counts as not found.
+- **Vars:** `{{name}}` in a document is replaced by `vars[name]`, plus `site_name` and `site_url` from `seo.json`. Substitution happens after parsing, so values are plain text, never Markdown. The operator's identity and contact, hosting providers, the minimum age (also used by the sign-up checkbox) and retention periods are defined there, once. A value containing `TODO` is a placeholder: `seo-gen` warns on every build and the app logs it. **Fill them in before going live.**
+- **Markdown subset** (`documents/markdown.rs`: parsed once by `pulldown-cmark` into blocks, drawn by `widgets::markdown` with theme styles only): headings, paragraphs, emphasis, strong, inline code, links, nested lists, block quotes (drawn as a box, used for "In short" summaries), code blocks, rules, strikethrough. egui's default font has no bold, so strong text and level-3+ headings use `colors.primary`. Tables are not enabled, images show their alt text, and HTML is dropped (use `<!-- comments -->` for notes to editors). Web links open in a new tab and `mailto:` links in the mail app; a relative link to another document's file (`privacy.md`, which also works when browsing the repo) opens that document in the panel. `#fragments` are ignored.
+- **Adding a document:** put the `.md` file in the folder and add its entry to `documents.json`. No code change. `cargo test` checks that ids and files are unique, dates are valid, every file exists, uses only known vars, and links only to other documents or to `http(s)`/`mailto` URLs.
+- **Document panel** (`Panel::Document(id)`, §5.6): "◀ <previous panel>" when opened from another panel (`document_back`, kept while following links between documents, so the sign-up form is one click away and keeps its input; opening a document doesn't abandon the login detour), "Last updated", the text, then links to the other footer documents.
+
+**Legal features** (EU operator: GDPR, ePrivacy, DSA):
+
+- **Map footer** (§5.6): Terms · Privacy · Legal notice · © OpenStreetMap contributors, whenever the map is visible.
+- **Sign-up:** a required checkbox "I am at least `min_age` years old and I accept the Terms of Use" (`RegisterForm::accepted_terms`, checked by `RegisterForm::validate`), and a line pointing to the Privacy Policy. The policy is information, not something to accept: the account's legal basis is the contract. **Browser-side only**: the backend doesn't record the acceptance yet (§13).
+- **Privacy notice** (`ui/notice.rs`): informative, **not a consent banner**. The app only stores strictly necessary data (§5.3 Persistence) and loads no trackers, so there is nothing to consent to. "Got it" stores the Privacy Policy's `updated` date in `notice_seen` (`wwc_notice`); when that date changes, the notice comes back as "Our Privacy Policy changed on …". Analytics or any other non-essential storage need consent first: the consent panel is ready for that (§5.12) and replaces the notice once enabled.
+- **Profile → "Your data"** points to the Privacy Policy: export and deletion are requested by email until they are self-service.
+- **Campsite form:** "The exact location is public" (§6).
+- **Keep the texts true to the code.** The Privacy Policy states the browser storage keys (`app.rs`), log retention (`backend/pb_settings.json` `logs.maxDays` = var `log_retention_days`, checked by a test), backups (`PB_BACKUPS_MAX_KEEP` = var `backup_retention_days`), what the API makes public (`docs/API.md`: profiles, individual ratings, original photo files with their metadata) and the providers. A change to any of these updates the policy, and its `updated` date, in the same change.
+
+### 5.12 Consent (`frontend/assets/consent.json`), disabled for now
+
+A consent panel for optional processing (analytics and any other non-essential storage or tracking: ePrivacy art. 5(3), GDPR art. 7) is built and tested but **off** (`"enabled": false`) until the first analytics are added. While it is off, nothing changes: no panel, no footer link, no `wwc_consent` key, and `AppState::consent_allows` is always false.
+
+- **Config** (`consent.json`, compiled in, `src/consent.rs`): `enabled`, `version`, `max_age_days` (180: choices are asked again after 6 months, CNIL guidance; tests cap it at 13 months) and `purposes` (`id`, `title`, `description`), each off until the visitor accepts it.
+- **Panel** (`ui/consent_panel.rs`): floats at the bottom-center of the map, above the footer, in place of the privacy notice (whose text says there are no analytics). "Accept all" and "Reject all" look the same and sit side by side; "Customize" shows one unticked checkbox per purpose and "Save my choices"; plus a Privacy Policy link. It doesn't block the map: until the visitor chooses, nothing is allowed. It hides with the footer when a panel covers the map on narrow screens.
+- **Choice** (`ConsentRecord`: `version`, `decided_at_ms`, `granted` purposes): `Action::SaveConsent(AcceptAll | RejectAll | Selected)`, saved as `wwc_consent`. At startup a record for another `version`, or older than `max_age_days`, is dropped, so the panel shows again.
+- **Withdrawal:** "Privacy choices" in the map footer (`Action::OpenConsent`) reopens the panel with the current choice ticked and a × to close without changes. Withdrawing is as easy as accepting.
+- **Using it:** code that needs consent checks `state.consent_allows("analytics")` before loading or sending anything, and stops when it becomes false.
+- **To enable, in the same change as the analytics:** set `"enabled": true`; describe the analytics in `privacy.md` (a commented draft is in its section 5: provider, data, retention, the `wwc_consent` key) and bump its `updated` date; gate the analytics on `consent_allows`; and bump `version` whenever the purposes change, so everyone is asked again.
+- **Limit:** the proof of consent stays in the visitor's browser (GDPR art. 7(1) asks to be able to demonstrate it). Enough for basic analytics; log choices on the server if the processing becomes riskier.
 
 ---
 
@@ -434,7 +479,7 @@ The UI is a canvas, so search engines and link-preview scrapers only see the sta
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Errors**      | No `unwrap()`/`expect()` outside tests and `main.rs` startup. Errors surface to the user as toasts or inline form errors; log details with `log` (`eframe::WebLogger` sends it to the browser console). `console_error_panic_hook` is installed in `main.rs`. An invalid `theme.json` panics at startup, but `cargo test` catches that first. |
 | **Security**    | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way).                                                                                                                              |
-| **Privacy**     | Never expose user emails publicly. Campsite coordinates are public by design — state this in the UI when posting.                                                                                                                                                                                                                             |
+| **Privacy**     | Never expose user emails publicly. Campsite coordinates are public by design, as the campsite form says. What is collected, public and stored is described in the Privacy Policy: keep it in sync (§5.11).                                                                                                                                    |
 | **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`.                                                                                                                           |
 | **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default). Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
 | **Time**        | Store UTC (PocketBase does); format in local time in the UI.                                                                                                                                                                                                                                                                                  |
@@ -538,6 +583,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0013 — Backend image built for amd64 and arm64 and pushed to GHCR on each published GitHub Release (semver tags, `latest` for non-prereleases).
 - 0014 — Build-time SEO: `seo.json` rendered into the static page by a Trunk hook (`tools/seo-gen`); crawlable `#about` block; only `/` indexed.
 - 0015 — Full GitHub Releases trigger the Render frontend deploy hook (`DEPLOY_HOOK` secret) after the backend image is pushed.
+- 0016 — Legal pages as in-app Markdown documents (`assets/documents/`, fetched on demand, `{{vars}}` in a compiled-in manifest), map footer, sign-up consent checkbox, informative privacy notice instead of a consent banner; a consent panel ready for analytics, disabled until then.
 
 ---
 
@@ -561,6 +607,8 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Reports: the `reports` collection and a Report panel for campsites and comments (§5.8). Admins read them in the dashboard.
 - Email verification (required to post) with mailpit in dev, and a production setup: static frontend build, PocketBase image, S3 files and backups, SMTP (ADR 0012).
 - Backend image (amd64 + arm64) published to GHCR on each GitHub Release (ADR 0013); full releases also deploy the frontend on Render (ADR 0015).
+- Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
+- Consent panel for analytics (§5.12), built and tested but disabled until analytics are added.
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 
@@ -571,4 +619,11 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 3. Avatar upload (reuse the photo picker and multipart client).
 4. Email change and account deletion.
 5. Custom fonts.
-6. Photo extras: client-side resize before upload, protected files for hidden campsites.
+   <<<<<<< HEAD
+6. Narrow-screen polish.
+7. Photo extras: client-side resize before upload, protected files for hidden campsites.
+8. Legal follow-ups (§5.11): record Terms acceptance on the server (a `terms_accepted_at` field set at sign-up, and re-acceptance when the Terms change), self-service data export and account deletion (with item 4), strip photo metadata (EXIF, GPS) before upload (the resize of item 7 does it), an illegal-content notice form for visitors without an account (email for now), a bold font for documents.
+   \=======
+9. Photo extras: client-side resize before upload, protected files for hidden campsites.
+
+> > > > > > > origin/master
