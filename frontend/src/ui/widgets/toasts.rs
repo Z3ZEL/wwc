@@ -1,8 +1,9 @@
-use egui::{Align2, Area, Button, Frame, Id, Margin, Order, RichText, Stroke};
+use egui::{Align2, Area, Button, Frame, Id, Label, Margin, Order, RichText, Stroke, Vec2};
 
 use crate::actions::ToastKind;
 use crate::state::Toast;
 use crate::ui::theme::Theme;
+use crate::ui::widgets::text_width;
 
 /// Toasts stacked at the bottom-left of the map. Each one disappears
 /// `layout.toast_duration_ms` after it was first shown, or when closed.
@@ -30,10 +31,16 @@ pub fn toasts(ctx: &egui::Context, theme: &Theme, toasts: &mut Vec<Toast>) {
                 .corner_radius(theme.radius())
                 .inner_margin(Margin::symmetric(12, 8))
                 .show(ui, |ui| {
-                    ui.set_max_width(360.0);
+                    // Never wider than the window (16 offset and 12 padding on each side).
+                    ui.set_max_width((ctx.content_rect().width() - 2.0 * (16.0 + 12.0)).min(360.0));
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(&toast.text).color(c.toast_text));
-                        if ui.add(Button::new(RichText::new("×").color(c.toast_text)).frame(false)).clicked() {
+                        // Long messages wrap, leaving room for the ×.
+                        let close = RichText::new("×").color(c.toast_text);
+                        let text_max = ui.available_width() - text_width(ui, &close) - ui.spacing().item_spacing.x;
+                        ui.allocate_ui(Vec2::new(text_max, 0.0), |ui| {
+                            ui.add(Label::new(RichText::new(&toast.text).color(c.toast_text)).wrap());
+                        });
+                        if ui.add(Button::new(close).frame(false)).clicked() {
                             closed = Some(i);
                         }
                     });

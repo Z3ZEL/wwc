@@ -34,13 +34,15 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
 
     ui.add_space(theme.spacing.section_gap);
     section_title(ui, "Location");
+    // Narrow screens: the panel covers the map until it is collapsed.
+    let tap = if theme.is_narrow(ui.ctx()) { "Tap ▶ to see the map, then tap it" } else { "Click on the map" };
     match (f.lat, f.lng) {
         (Some(lat), Some(lng)) => {
             ui.monospace(format!("{lat:.5}, {lng:.5}"));
-            muted(ui, theme, "Click on the map to move the pin.");
+            muted(ui, theme, format!("{tap} to move the pin."));
         }
         _ => {
-            muted(ui, theme, "Click on the map to place the campsite.");
+            muted(ui, theme, format!("{tap} to place the campsite."));
         }
     }
     if ui.button("Use map center").clicked() {

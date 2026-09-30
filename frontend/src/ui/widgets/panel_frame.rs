@@ -1,4 +1,4 @@
-use egui::{Align, Button, Id, Layout, Panel, RichText, ScrollArea, Stroke, Ui};
+use egui::{Align, Button, Id, Layout, Panel, RichText, ScrollArea, Stroke, Ui, Vec2};
 
 use crate::actions::Action;
 use crate::ui::theme::Theme;
@@ -23,7 +23,7 @@ pub fn panel_frame(
 
     // Show and collapse share one animation value (egui keys both on the expanded
     // panel's id), so every transition picks up where the previous one stopped.
-    let narrow = ui.ctx().content_rect().width() < layout.narrow_breakpoint;
+    let narrow = theme.is_narrow(ui.ctx());
     let expanded = Panel::right("side_panel").frame(frame);
     let expanded = if narrow {
         expanded.resizable(false).exact_size(ui.available_width())
@@ -38,7 +38,7 @@ pub fn panel_frame(
     let Some(title) = title else {
         let title = ui.data(|d| d.get_temp::<String>(last_title)).unwrap_or_default();
         expanded.resizable(false).drag_to_open(false).show_collapsible(ui, &mut false, |ui| {
-            header(ui, theme, &title, narrow, &mut Vec::new());
+            header(ui, theme, &title, &mut Vec::new());
         });
         return;
     };
@@ -54,13 +54,16 @@ pub fn panel_frame(
         if !expanded {
             ui.vertical_centered(|ui| {
                 ui.add_space(8.0);
-                if ui.add(Button::new("◀").frame(false)).on_hover_text(format!("Show {title}")).clicked() {
+                let expand = Button::new("◀")
+                    .frame(false)
+                    .min_size(egui::vec2(layout.side_panel_collapsed_width, layout.icon_button_size));
+                if ui.add(expand).on_hover_text(format!("Show {title}")).clicked() {
                     actions.push(Action::ToggleCollapse);
                 }
             });
             return;
         }
-        header(ui, theme, title, narrow, actions);
+        header(ui, theme, title, actions);
         ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             egui::Frame::NONE.inner_margin(theme.panel_margin()).show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -74,7 +77,7 @@ pub fn panel_frame(
     }
 }
 
-fn header(ui: &mut Ui, theme: &Theme, title: &str, narrow: bool, actions: &mut Vec<Action>) {
+fn header(ui: &mut Ui, theme: &Theme, title: &str, actions: &mut Vec<Action>) {
     egui::Frame::NONE
         .fill(theme.colors.panel_header_bg)
         .inner_margin(egui::Margin::symmetric(theme.panel_margin().left, 8))
@@ -83,10 +86,14 @@ fn header(ui: &mut Ui, theme: &Theme, title: &str, narrow: bool, actions: &mut V
             ui.horizontal(|ui| {
                 ui.label(RichText::new(title).heading());
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.add(Button::new("×").frame(false)).on_hover_text("Close").clicked() {
+                    let icon =
+                        |text| Button::new(text).frame(false).min_size(Vec2::splat(theme.layout.icon_button_size));
+                    if ui.add(icon("×")).on_hover_text("Close").clicked() {
                         actions.push(Action::ClosePanel);
                     }
-                    if !narrow && ui.add(Button::new("▶").frame(false)).on_hover_text("Collapse").clicked() {
+                    // Also on narrow screens, where the panel covers the map: collapsing it
+                    // uncovers the map, e.g. to place the new campsite's pin.
+                    if ui.add(icon("▶")).on_hover_text("Collapse").clicked() {
                         actions.push(Action::ToggleCollapse);
                     }
                 });
