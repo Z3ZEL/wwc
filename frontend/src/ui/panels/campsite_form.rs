@@ -46,6 +46,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
     if ui.button("Use map center").clicked() {
         actions.push(Action::MapClicked { lat: center_lat, lng: center_lng });
     }
+    muted(ui, theme, "The exact location is public: anyone can see it on the map.");
     field_error(ui, theme, err, "location");
     field_error(ui, theme, err, "lat");
     field_error(ui, theme, err, "lng");

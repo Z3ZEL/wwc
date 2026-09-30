@@ -69,7 +69,25 @@ pub enum Action {
     /// Send the Report panel's form.
     SubmitReport,
 
+    /// Fetch a document again (Retry). Opening a Document panel fetches it the first time.
+    LoadDocument(String),
+    /// "Got it" on the privacy notice.
+    DismissNotice,
+    /// "Privacy choices" in the map footer: show the consent panel again.
+    OpenConsent,
+    /// Close the reopened consent panel without changing anything.
+    CloseConsent,
+    SaveConsent(ConsentChoice),
+
     Toast(String, ToastKind),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsentChoice {
+    AcceptAll,
+    RejectAll,
+    /// The purposes ticked in the consent panel.
+    Selected,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,4 +170,10 @@ pub enum Event {
         result: ApiResult<()>,
     },
     ReportSent(ApiResult<Report>),
+
+    /// The Markdown text of a document.
+    Document {
+        id: String,
+        result: ApiResult<String>,
+    },
 }

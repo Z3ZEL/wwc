@@ -66,8 +66,36 @@ pub struct RegisterForm {
     pub email: String,
     pub password: String,
     pub confirm: String,
+    /// "I am old enough and I accept the Terms of Use" (checked in the browser only: the
+    /// backend doesn't record it yet).
+    pub accepted_terms: bool,
     pub error: Option<ApiError>,
     pub submitting: bool,
+}
+
+impl RegisterForm {
+    /// What can be checked before asking the server.
+    pub fn validate(&self) -> BTreeMap<String, String> {
+        let mut errors = BTreeMap::new();
+        if self.password != self.confirm {
+            errors.insert("passwordConfirm".into(), "Passwords don't match.".into());
+        }
+        if !self.accepted_terms {
+            errors.insert("terms".into(), "Please confirm your age and accept the Terms of Use.".into());
+        }
+        errors
+    }
+}
+
+/// The consent panel (ARCHITECTURE §5.12). The saved choice is `AppState::consent`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ConsentPanel {
+    /// Opened again from the footer ("Privacy choices") after a choice was made.
+    pub reopened: bool,
+    /// Shows one checkbox per purpose.
+    pub customizing: bool,
+    /// Ticked purposes. Nothing is ticked until the visitor ticks it.
+    pub choices: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -362,6 +390,16 @@ mod tests {
         let input = form.to_input("u".into(), &ReportTarget::Comment("k1".into())).expect("reason is set");
         assert_eq!(input.details, "Rude words");
         assert_eq!(input.comment.as_deref(), Some("k1"));
+    }
+
+    #[test]
+    fn register_needs_matching_passwords_and_accepted_terms() {
+        let mut form = RegisterForm { password: "a".into(), confirm: "b".into(), ..Default::default() };
+        let errors = form.validate();
+        assert!(errors.contains_key("passwordConfirm") && errors.contains_key("terms"));
+        form.confirm = "a".into();
+        form.accepted_terms = true;
+        assert!(form.validate().is_empty());
     }
 
     #[test]

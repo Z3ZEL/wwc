@@ -10,6 +10,10 @@ use serde_json::json;
 /// The `site_url` shipped until a production domain exists.
 pub const PLACEHOLDER_SITE_URL: &str = "https://example.com";
 
+/// Marks a `frontend/assets/documents/documents.json` var that still needs its real value
+/// (the frontend's `documents::PLACEHOLDER`).
+pub const DOCUMENT_PLACEHOLDER: &str = "TODO";
+
 /// Markers in `frontend/index.html`, replaced by [`inject`].
 pub const HEAD_MARKER: &str = "<!-- seo:head -->";
 pub const BODY_MARKER: &str = "<!-- seo:body -->";
@@ -82,6 +86,17 @@ pub struct ThemeColors {
 #[derive(Deserialize)]
 struct ThemeFile {
     colors: ThemeColors,
+}
+
+/// The documents' vars that still hold a placeholder: the legal pages would show them
+/// (ARCHITECTURE §5.11). Only `vars` is read here; the frontend's tests check the rest.
+pub fn document_placeholders(documents_json: &str) -> Result<Vec<String>, String> {
+    #[derive(Deserialize)]
+    struct Manifest {
+        vars: std::collections::BTreeMap<String, String>,
+    }
+    let manifest: Manifest = serde_json::from_str(documents_json).map_err(|e| format!("documents.json: {e}"))?;
+    Ok(manifest.vars.into_iter().filter(|(_, v)| v.contains(DOCUMENT_PLACEHOLDER)).map(|(k, _)| k).collect())
 }
 
 impl Seo {
@@ -323,6 +338,13 @@ mod tests {
         assert_eq!(s.validate().map(|w| w.len()), Ok(1));
         s.site_url = "https://wwc.test".into();
         assert_eq!(s.validate().map(|w| w.len()), Ok(0));
+    }
+
+    #[test]
+    fn lists_document_placeholders() {
+        let json = r#"{"vars": {"a": "TODO name", "b": "Ann", "c": "x TODO"}, "documents": []}"#;
+        assert_eq!(document_placeholders(json), Ok(vec!["a".to_owned(), "c".to_owned()]));
+        assert!(document_placeholders("{}").is_err());
     }
 
     #[test]

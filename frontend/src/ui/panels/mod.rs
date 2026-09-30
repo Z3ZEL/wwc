@@ -4,6 +4,7 @@
 mod auth;
 mod campsite_form;
 mod campsite_view;
+mod document;
 mod filters;
 mod profile;
 mod report;
@@ -44,6 +45,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
             Panel::Search => search::show(ui, state, theme, actions),
             Panel::Filters => filters::show(ui, state, theme, actions),
             Panel::Report(target) => report::show(ui, state, theme, &target, actions),
+            Panel::Document(id) => document::show(ui, state, theme, &id, actions),
         }
     });
 }

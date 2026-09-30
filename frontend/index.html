@@ -6,6 +6,8 @@
   <!-- SEO tags come from assets/seo.json, filled in by tools/seo-gen (Trunk post_build hook). -->
   <!-- seo:head -->
   <link data-trunk rel="rust" data-wasm-opt="s" />
+  <!-- Markdown documents (legal pages…), fetched by the app when opened: ARCHITECTURE §5.11. -->
+  <link data-trunk rel="copy-dir" href="assets/documents" />
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
     /* Readable for crawlers and no-JS browsers; the app canvas covers it once running. */

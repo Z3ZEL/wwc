@@ -5,7 +5,9 @@
 pub mod actions;
 pub mod api;
 pub mod config;
+pub mod consent;
 pub mod controller;
+pub mod documents;
 pub mod map;
 pub mod seo;
 pub mod state;

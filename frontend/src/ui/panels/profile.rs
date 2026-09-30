@@ -1,9 +1,12 @@
-use egui::Ui;
+use egui::{Ui, Vec2};
 
 use crate::actions::Action;
-use crate::state::AppState;
+use crate::documents::{self, PRIVACY};
+use crate::state::{AppState, Panel};
 use crate::ui::theme::Theme;
-use crate::ui::widgets::{field_error, form_error, muted, primary_button, section_title, text_field, verify_prompt};
+use crate::ui::widgets::{
+    field_error, form_error, link_button, muted, primary_button, section_title, text_field, verify_prompt,
+};
 
 pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
     let Some(session) = &state.session else { return };
@@ -36,6 +39,20 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
     if primary_button(ui, theme, if busy { "Changing…" } else { "Change password" }, !busy).clicked() {
         actions.push(Action::ChangePassword);
     }
+
+    ui.add_space(theme.spacing.section_gap);
+    ui.separator();
+    section_title(ui, "Your data");
+    // No self-service export or deletion yet: the policy explains how to ask for them.
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::ZERO;
+        muted(ui, theme, "To get a copy of your data or delete your account, see the ");
+        let title = documents::manifest().get(PRIVACY).map_or("Privacy Policy", |d| d.title.as_str());
+        if link_button(ui, theme, title).clicked() {
+            actions.push(Action::OpenPanel(Panel::Document(PRIVACY.to_owned())));
+        }
+        muted(ui, theme, ".");
+    });
 
     ui.add_space(theme.spacing.section_gap);
     ui.separator();

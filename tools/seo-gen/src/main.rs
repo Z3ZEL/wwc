@@ -1,12 +1,13 @@
 //! Trunk `post_build` hook (frontend/Trunk.toml). Reads `assets/seo.json` and
 //! `assets/theme.json` from `TRUNK_SOURCE_DIR`, then fills `index.html` and writes
-//! robots.txt, sitemap.xml and the SEO images into `TRUNK_STAGING_DIR`.
+//! robots.txt, sitemap.xml and the SEO images into `TRUNK_STAGING_DIR`. It also warns
+//! about placeholder values left in `assets/documents/documents.json` (the legal pages).
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::{env, fs};
 
-use seo_gen::{Seo, ThemeColors, inject};
+use seo_gen::{Seo, ThemeColors, document_placeholders, inject};
 
 fn main() -> ExitCode {
     match run() {
@@ -28,6 +29,14 @@ fn run() -> Result<(), String> {
         eprintln!("seo-gen: warning: {warning}");
     }
     let theme = ThemeColors::parse(&read(&assets.join("theme.json"))?)?;
+    let placeholders = document_placeholders(&read(&assets.join("documents").join("documents.json"))?)?;
+    if !placeholders.is_empty() {
+        eprintln!(
+            "seo-gen: warning: the legal pages still show placeholders: set {} in assets/documents/documents.json \
+             before deploying",
+            placeholders.join(", ")
+        );
+    }
 
     let index = staging.join("index.html");
     write(&index, &inject(&read(&index)?, &seo, &theme)?)?;

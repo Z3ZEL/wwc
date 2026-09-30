@@ -50,6 +50,7 @@ WWC_API_URL=https://api.example.com scripts/build-frontend.sh   # → frontend/d
 - No local Rust/Trunk? Build in the dev image: `docker compose run --rm -e WWC_API_URL=https://api.example.com frontend /app/scripts/build-frontend.sh`
 - Upload `frontend/dist/` to any static host (S3 + CDN, Netlify, Cloudflare Pages, nginx…). Serve `.wasm` as `application/wasm`. The JS and wasm file names are hashed, so they can be cached forever; serve `index.html` with `Cache-Control: no-cache`.
 - Set `PB_ORIGINS` on the backend to the frontend's origin, or every API call is blocked by CORS.
+- **Legal pages:** before going live, replace every `TODO` value in [`frontend/assets/documents/documents.json`](frontend/assets/documents/documents.json) (your name, postal address, contact email, country, data protection authority, hosting providers). They fill in the Terms of Use, Privacy Policy and Legal Notice shown in the app, and the build warns while any is left. When you edit a document, bump its `updated` date. See ARCHITECTURE §5.11.
 
 **Building on a host or in CI** (Render, Netlify, Cloudflare Pages, GitHub Actions…): build environments don't ship Trunk or the pinned toolchain, so install them in the same step. On any Linux x86_64 machine with `curl`, `tar` and `cc`:
 

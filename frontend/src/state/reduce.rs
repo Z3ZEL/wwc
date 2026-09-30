@@ -5,6 +5,7 @@
 use crate::actions::{Action, Event, ToastKind};
 use crate::api::ApiError;
 use crate::api::models::Session;
+use crate::documents;
 
 use super::{AppState, CampsiteForm, Panel, Remote};
 
@@ -300,6 +301,11 @@ pub fn apply(state: &mut AppState, event: Event) -> Vec<Action> {
                 }
             }
         }
+
+        Event::Document { id, result } => {
+            let doc = result.map(|text| documents::manifest().prepare(&text));
+            state.documents.insert(id, doc.into());
+        }
     }
     vec![]
 }
@@ -488,6 +494,18 @@ mod tests {
         assert!(s.campsite_form.dirty);
         assert_eq!(s.toasts.len(), 1);
         assert_eq!(s.toasts[0].kind, ToastKind::Error);
+    }
+
+    #[test]
+    fn documents_are_parsed_with_their_vars() {
+        let mut s = AppState::default();
+        apply(&mut s, Event::Document { id: "terms".into(), result: Ok("# {{site_name}}".into()) });
+        let name = crate::documents::manifest().var("site_name").unwrap_or_default().to_owned();
+        let Some(Remote::Loaded(blocks)) = s.documents.get("terms") else { panic!("{:?}", s.documents) };
+        assert!(matches!(&blocks[..], [crate::documents::Block::Heading(1, spans)] if spans[0].text == name));
+
+        apply(&mut s, Event::Document { id: "terms".into(), result: Err(ApiError::network("offline")) });
+        assert!(matches!(s.documents.get("terms"), Some(Remote::Failed(_))));
     }
 
     #[test]

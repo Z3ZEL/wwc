@@ -1,5 +1,6 @@
 //! The full-screen map: tiles (walkers + OpenStreetMap), campsite markers and clusters,
 //! the draft pin of the campsite form, and viewport → bbox reporting (ARCHITECTURE §5.5).
+//! The tile attribution is in the map footer (`ui::footer`), next to the legal links.
 
 use egui::{Align2, Button, FontId, Pos2, Rect, Response, RichText, Stroke, Ui, Vec2};
 use walkers::sources::OpenStreetMap;
@@ -54,7 +55,6 @@ impl MapView {
         let (bbox, center, rect, zoom_into) = map
             .show(ui, |ui, response, projector, memory| {
                 let zoom_into = draw_markers(ui, response, projector, memory.zoom(), state, theme, actions);
-                attribution(ui, response.rect, theme);
                 let center = projector.unproject(response.rect.center().to_vec2());
                 (viewport(projector, response.rect), center, response.rect, zoom_into)
             })
@@ -239,18 +239,4 @@ fn label(painter: &egui::Painter, theme: &Theme, at: Pos2, text: &str) {
     let rect = Align2::LEFT_CENTER.anchor_size(at, galley.size()).expand(4.0);
     painter.rect_filled(rect, theme.radius(), c.label_bg);
     painter.galley(rect.min + Vec2::splat(4.0), galley, c.label_text);
-}
-
-fn attribution(ui: &mut Ui, map_rect: Rect, theme: &Theme) {
-    let c = &theme.map.colors;
-    let size = Vec2::new(190.0, 18.0);
-    let rect = Rect::from_min_size(map_rect.right_bottom() - size, size);
-    ui.painter().rect_filled(rect, 0.0, c.attribution_bg);
-    ui.put(
-        rect,
-        egui::Hyperlink::from_label_and_url(
-            RichText::new("© OpenStreetMap contributors").small().color(c.attribution_text),
-            "https://www.openstreetmap.org/copyright",
-        ),
-    );
 }

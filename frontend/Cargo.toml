@@ -17,6 +17,8 @@ ehttp = { version = "0.7.1", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+# Markdown documents (assets/documents/, ARCHITECTURE §5.11): parser only, no HTML renderer.
+pulldown-cmark = { version = "0.13.4", default-features = false }
 
 # Web-only: the app shell and the map. Pure logic (state, api, theme, ui) also builds on
 # the host so `cargo test` runs without a browser.

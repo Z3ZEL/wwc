@@ -121,6 +121,10 @@ pub struct Spacing {
     pub top_bar_padding: [f32; 2],
     /// Space between photo thumbnails.
     pub photo_gap: f32,
+    /// Width of the bullet / number column of Markdown lists (documents).
+    pub list_indent: f32,
+    /// Inner padding of the strip at the bottom-right of the map (legal links, attribution).
+    pub map_footer_padding: [f32; 2],
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -162,6 +166,8 @@ pub struct Layout {
     pub spinner_stroke: f32,
     /// Time for one full turn.
     pub spinner_period_ms: u32,
+    /// Widest the privacy notice and the consent panel at the bottom of the map get.
+    pub notice_max_width: f32,
 }
 
 #[derive(Debug, Clone, Deserialize)]

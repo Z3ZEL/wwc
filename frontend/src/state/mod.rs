@@ -5,14 +5,19 @@ mod forms;
 mod reduce;
 
 pub use forms::{
-    CampsiteForm, LoginForm, MAX_PHOTO_BYTES, MAX_PHOTOS, NewPhoto, PHOTO_MIME_TYPES, PhotoRef, PickedPhoto,
-    ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem, tent_capacity_label,
+    CampsiteForm, ConsentPanel, LoginForm, MAX_PHOTO_BYTES, MAX_PHOTOS, NewPhoto, PHOTO_MIME_TYPES, PhotoRef,
+    PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem,
+    tent_capacity_label,
 };
 pub use reduce::apply;
+
+use std::collections::BTreeMap;
 
 use crate::actions::ToastKind;
 use crate::api::models::{Campsite, CampsiteMarker, CampsiteStats, Comment, Rating, ReportTarget, Session, Tag};
 use crate::api::{ApiError, BBox, CampsiteFilter};
+use crate::consent::{self, ConsentRecord};
+use crate::documents::Block;
 
 /// The side panel shown over the map (ARCHITECTURE §5.6).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +34,8 @@ pub enum Panel {
     Filters,
     /// Report form for a campsite or a comment of the open campsite.
     Report(ReportTarget),
+    /// A Markdown document from `assets/documents/` (legal pages…), by manifest id.
+    Document(String),
 }
 
 impl Panel {
@@ -51,6 +58,7 @@ impl Panel {
             Panel::Search => "Search results",
             Panel::Filters => "Filters",
             Panel::Report(_) => "Report",
+            Panel::Document(id) => crate::documents::manifest().get(id).map_or("Document", |d| d.title.as_str()),
         }
     }
 }
@@ -191,6 +199,8 @@ pub struct AppState {
     pub confirm_discard: Option<Option<Panel>>,
     /// Panel to open once the user has logged in.
     pub after_login: Option<Panel>,
+    /// Where a Document panel was opened from (e.g. the sign-up form), for its back link.
+    pub document_back: Option<Panel>,
 
     pub campsite_count: Remote<i64>,
     pub tags: Remote<Vec<Tag>>,
@@ -208,6 +218,16 @@ pub struct AppState {
     pub map_focus: Option<(f64, f64)>,
 
     pub detail: Option<CampsiteDetail>,
+
+    /// Fetched documents by id, parsed. Kept for the whole session.
+    pub documents: BTreeMap<String, Remote<Vec<Block>>>,
+    /// The Privacy Policy version (`updated` date) the privacy notice was dismissed for.
+    /// Saved in the browser; the notice shows again when the policy changes.
+    pub notice_seen: Option<String>,
+    /// The visitor's consent choice (saved in the browser), `None` until they choose. Only
+    /// used while `consent.json` enables consent (§5.12).
+    pub consent: Option<ConsentRecord>,
+    pub consent_panel: ConsentPanel,
 
     pub login: LoginForm,
     pub register: RegisterForm,
@@ -237,6 +257,17 @@ impl AppState {
             Some(Panel::Report(_)) if !self.report.campsite_id.is_empty() => Some(&self.report.campsite_id),
             _ => None,
         }
+    }
+
+    /// Whether an optional purpose (e.g. `"analytics"`) may run: the visitor accepted it.
+    /// Always false while consent is disabled in `consent.json`.
+    pub fn consent_allows(&self, purpose: &str) -> bool {
+        consent::config().allows(self.consent.as_ref(), purpose)
+    }
+
+    /// The consent panel is on screen: no choice yet, or reopened from the footer.
+    pub fn consent_panel_open(&self) -> bool {
+        consent::config().enabled && (self.consent.is_none() || self.consent_panel.reopened)
     }
 
     pub fn is_campsite_form_open(&self) -> bool {
