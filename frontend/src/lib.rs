@@ -9,6 +9,7 @@ pub mod consent;
 pub mod controller;
 pub mod documents;
 pub mod map;
+pub mod media;
 pub mod seo;
 pub mod state;
 pub mod ui;
