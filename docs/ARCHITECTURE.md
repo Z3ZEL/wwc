@@ -1,6 +1,6 @@
 # Architecture Guidelines
 
-> Status: **v0.7** (2026-09-29). This is the reference that agents and humans follow when building the app.
+> Status: **v0.8** (2026-10-01). This is the reference that agents and humans follow when building the app.
 > The MVP is implemented. §13 lists what exists and what is deferred.
 > If you need to break a rule here, update this document in the same change and explain why in an ADR (see §12).
 
@@ -98,7 +98,8 @@ wwc/
 │       ├── seo.rs             # browser tab title from seo.json
 │       ├── documents/         # documents.json manifest + vars, Markdown → blocks parser (host-tested)
 │       ├── consent.rs         # consent.json + consent records: validity, expiry, `allows` (host-tested)
-│       ├── web/               # browser APIs egui lacks (photo file picker, document title), wasm only
+│       ├── media/             # photo upload settings + lossless metadata stripping (host-tested)
+│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
@@ -319,7 +320,7 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 - DTOs in `models.rs` with `serde` mirroring PocketBase JSON (snake_case field names, `id`, `created`, `updated`, `expand` for relations). Use `expand=author` to fetch display names in one call.
 - `ApiError` maps PocketBase's error body (`status`, `message`, `data` per-field errors) so forms can show field-level validation messages.
 - On `401` → clear session, route to login with a toast. Refresh the token on startup via `auth-refresh`.
-- **Photos:** a save with new photos is one `multipart/form-data` request: a `@jsonPayload` part (the normal JSON body, with `photos-` for removals) plus `photos+` file parts. The body is built by a pure function in `api/client.rs`. `photo_url(origin, campsite, file, PhotoSize)` builds absolute thumb URLs (egui's loader only takes `http(s)://`). The origin comes from `AppState.origin`. The UI never loads original files.
+- **Photos:** a save with new photos is one `multipart/form-data` request: a `@jsonPayload` part (the normal JSON body, with `photos-` for removals) plus `photos+` file parts. The body is built by a pure function in `api/client.rs`. The files are never the originals: they are re-encoded without metadata first (§5.6, ADR 0017). `photo_url(origin, campsite, file, PhotoSize)` builds absolute thumb URLs (egui's loader only takes `http(s)://`). The origin comes from `AppState.origin`. The UI never loads original files.
 - **No hand-built filter strings scattered in UI code.** Filters are built inside `api/`, only from numbers and from ids that pass `is_record_id` (alphanumeric only). The one exception is search text, which goes through `clean_search` (quotes, backslashes, backticks and control characters dropped, 100 chars max) before being quoted (ADR 0011).
 
 ### 5.5 Map (`map/`)
@@ -332,7 +333,7 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 - Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons sit in the top-left corner. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
 - When the viewport settles (debounce ~300 ms after pan/zoom stops), emit `Action::ViewportChanged(bbox)`, which triggers the bbox query (§4.4).
 - "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. Opening a fresh form shows an info toast: "Tip: click on the map to place your campsite." The panel shows the coordinates plus a "Use map center" button.
-- Campsite form fields: title, description, tags (multi-select chips from the loaded tag list), tent capacity (a stepper or slider 1–10 that shows `10+` at max), photos (thumbnails with × to remove, and "Add photos (n/3)", which opens the browser file dialog; wrong type, size or count → error toast). Picked photos are previewed from a small JPEG made by the browser and uploaded on save.
+- Campsite form fields: title, description, tags (multi-select chips from the loaded tag list), tent capacity (a stepper or slider 1–10 that shows `10+` at max), photos (thumbnails with × to remove, and "Add photos (n/3)", which opens the browser file dialog; wrong type, size or count → error toast). Picked photos are re-encoded by the browser before the form sees them: fitted in 2048 px, WebP (JPEG where the browser can't encode WebP), with no metadata (GPS position, date, camera), and `media::strip_metadata` as a safety net; a photo whose metadata can't be removed is refused (ADR 0017). The form says so, shows the size before → after, and previews each photo from a small JPEG made from the same decode. They are uploaded on save.
 - **Filters panel** (`Panel::Filters`): tag chips (all selected tags must match) and a tent capacity range (one two-handle slider, `widgets::range_slider`, 1–10+; the handles can't cross), plus Reset. Filters are global: they apply to the markers and to search, and stay on when the panel is closed. Each change is an `Action` that re-runs the bbox query and the current search.
 
 ### 5.6 Page layout and navigation
@@ -457,7 +458,7 @@ Long texts shown in the app are Markdown files in `frontend/assets/documents/`, 
 - **Privacy notice** (`ui/notice.rs`): informative, **not a consent banner**. The app only stores strictly necessary data (§5.3 Persistence) and loads no trackers, so there is nothing to consent to. "Got it" stores the Privacy Policy's `updated` date in `notice_seen` (`wwc_notice`); when that date changes, the notice comes back as "Our Privacy Policy changed on …". Analytics or any other non-essential storage need consent first: the consent panel is ready for that (§5.12) and replaces the notice once enabled.
 - **Profile → "Your data"** points to the Privacy Policy: export and deletion are requested by email until they are self-service.
 - **Campsite form:** "The exact location is public" (§6).
-- **Keep the texts true to the code.** The Privacy Policy states the browser storage keys (`app.rs`), log retention (`backend/pb_settings.json` `logs.maxDays` = var `log_retention_days`, checked by a test), backups (`PB_BACKUPS_MAX_KEEP` = var `backup_retention_days`), what the API makes public (`docs/API.md`: profiles, individual ratings, original photo files with their metadata) and the providers. A change to any of these updates the policy, and its `updated` date, in the same change.
+- **Keep the texts true to the code.** The Privacy Policy states the browser storage keys (`app.rs`), log retention (`backend/pb_settings.json` `logs.maxDays` = var `log_retention_days`, checked by a test), backups (`PB_BACKUPS_MAX_KEEP` = var `backup_retention_days`), what the API makes public (`docs/API.md`: profiles, individual ratings, photo files, stripped of their metadata since ADR 0017) and the providers. A change to any of these updates the policy, and its `updated` date, in the same change.
 
 ### 5.12 Consent (`frontend/assets/consent.json`), disabled for now
 
@@ -539,7 +540,7 @@ Conventions:
 | Unit (Rust)   | `state::apply`, controller logic, filter building/escaping, DTO (de)serialization against recorded PocketBase JSON fixtures                                                                                                                                                                      | `cargo test` on the host (pure logic, no wasm needed)                                                        |
 | Wasm          | Anything touching `web-sys` (currently only `main.rs`)                                                                                                                                                                                                                                           | `wasm-bindgen-test` (headless browser), only where needed                                                    |
 | Backend rules | Every API rule: anon/user/owner/other-user/admin cases for list/view/create/update/delete. Must include: rating or commenting on your own campsite is rejected; a user can't set `role`/`hidden`/`status`; hidden content is invisible to others; non-admins can't list reports they didn't file | Script (e.g. shell + curl or a small Rust integration test) against the dockerized PocketBase with seed data |
-| Manual smoke  | Map loads, markers appear, login, create campsite with photos (add, remove, 3/3 limit, bad type/size), browse them in the viewer (arrows, keys, thumbnails, Esc/backdrop close), rate, comment, narrow width                                                                                     | Checklist in the PR                                                                                          |
+| Manual smoke  | Map loads, markers appear, login, create campsite with photos (add, remove, 3/3 limit, bad type/size, uploaded file has no EXIF/GPS and is ≤ 2048 px, a sideways-EXIF photo shows upright), browse them in the viewer (arrows, keys, thumbnails, Esc/backdrop close), rate, comment, narrow width                                                                                     | Checklist in the PR                                                                                          |
 
 **A change to an API rule without a corresponding rule test is incomplete.**
 
@@ -584,6 +585,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0014 — Build-time SEO: `seo.json` rendered into the static page by a Trunk hook (`tools/seo-gen`); crawlable `#about` block; only `/` indexed.
 - 0015 — Full GitHub Releases trigger the Render frontend deploy hook (`DEPLOY_HOOK` secret) after the backend image is pushed.
 - 0016 — Legal pages as in-app Markdown documents (`assets/documents/`, fetched on demand, `{{vars}}` in a compiled-in manifest), map footer, sign-up consent checkbox, informative privacy notice instead of a consent banner; a consent panel ready for analytics, disabled until then.
+- 0017 — Photos are re-encoded in the browser before upload (2048 px, WebP or JPEG), which removes their metadata; lossless `strip_metadata` as a safety net and fallback; photos whose metadata can't be removed are refused.
 
 ---
 
@@ -599,7 +601,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Campsite panel: stats, star rating (create or update), paginated comments, deleting your own comments.
 - Collapsible and closable side panel, with an unsaved-changes prompt.
 - Toasts.
-- Campsite photos: up to 3 per campsite, uploaded from the campsite form, shown in the Campsite panel (ADR 0010).
+- Campsite photos: up to 3 per campsite, uploaded from the campsite form, shown in the Campsite panel (ADR 0010); resized, compressed and stripped of their metadata in the browser before upload (ADR 0017).
 - All API rules plus the rule-test script, seed script and docker compose stack.
 - Search by campsite name (top bar → Search panel), global map filters (tags, tent capacity range) and marker clustering (ADR 0011).
 - Narrow screens (phones): two-row top bar with a ☰ account menu, collapsible full-width panel, touch-sized panel buttons, toasts and photo viewer that fit the window.
@@ -619,11 +621,6 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 3. Avatar upload (reuse the photo picker and multipart client).
 4. Email change and account deletion.
 5. Custom fonts.
-   <<<<<<< HEAD
 6. Narrow-screen polish.
-7. Photo extras: client-side resize before upload, protected files for hidden campsites.
-8. Legal follow-ups (§5.11): record Terms acceptance on the server (a `terms_accepted_at` field set at sign-up, and re-acceptance when the Terms change), self-service data export and account deletion (with item 4), strip photo metadata (EXIF, GPS) before upload (the resize of item 7 does it), an illegal-content notice form for visitors without an account (email for now), a bold font for documents.
-   \=======
-9. Photo extras: client-side resize before upload, protected files for hidden campsites.
-
-> > > > > > > origin/master
+7. Photo extras: protected files for hidden campsites, server-side metadata removal for clients that bypass the app (ADR 0017).
+8. Legal follow-ups (§5.11): record Terms acceptance on the server (a `terms_accepted_at` field set at sign-up, and re-acceptance when the Terms change), self-service data export and account deletion (with item 4), an illegal-content notice form for visitors without an account (email for now), a bold font for documents.
