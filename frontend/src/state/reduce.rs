@@ -477,9 +477,10 @@ mod tests {
         let photo = |name: &str, mime: &str| PickedPhoto {
             name: name.into(),
             mime: mime.into(),
-            size: 3,
+            original_size: 3,
             bytes: vec![1, 2, 3].into(),
             preview: None,
+            problem: None,
         };
         let mut s = logged_in();
         s.photo_seq = 41;

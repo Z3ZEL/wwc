@@ -44,7 +44,7 @@ _Legal basis:_ the performance of our [Terms of Use](terms.md), which you accept
 
 All of this is **public**, with your display name. The site shows the average of the ratings, but individual ratings, and the account that gave them, can also be read by anyone through our public interface.
 
-**Photos are published as you upload them.** Photo files often contain hidden metadata, such as the GPS position where the photo was taken, the date and the camera model. Anyone can download the original file, so remove this metadata before you upload a photo if you don't want to share it.
+**Photos are published without their hidden metadata.** Photo files often contain the GPS position where the photo was taken, the date and the camera model. Before a photo leaves your device, the site removes this metadata and resizes the photo; only the pixels are uploaded, and anyone can download the published file. Photos added before the last update of this policy were published as uploaded: remove them and add them again if you want their metadata gone.
 
 
 _Legal basis:_ the performance of the Terms of Use, since publishing is the service you ask for (article 6(1)(b)). _Kept:_ until you delete the item or your account, or until moderation removes it.

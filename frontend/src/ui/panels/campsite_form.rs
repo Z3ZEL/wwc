@@ -7,8 +7,9 @@ use egui::{CursorIcon, ImageSource, Slider, TextEdit, Ui};
 use crate::actions::Action;
 use crate::api::models::Campsite;
 use crate::api::{PhotoSize, photo_url};
+use crate::media::format_bytes;
 use crate::state::{
-    AppState, CampsiteForm, MAX_PHOTO_BYTES, MAX_PHOTOS, Panel, PhotoRef, Remote, TENT_CAPACITY_MAX,
+    AppState, CampsiteForm, MAX_PHOTOS, MAX_SOURCE_BYTES, Panel, PhotoRef, Remote, TENT_CAPACITY_MAX,
     tent_capacity_label,
 };
 use crate::ui::theme::Theme;
@@ -161,7 +162,15 @@ fn photos(
     muted(
         ui,
         theme,
-        format!("Up to {MAX_PHOTOS} photos: JPEG, PNG or WebP, {} MB each.", MAX_PHOTO_BYTES / (1024 * 1024)),
+        format!(
+            "Up to {MAX_PHOTOS} photos: JPEG, PNG or WebP, {} MB each. They are resized, and their hidden \
+             metadata (GPS position, date, camera) is removed before upload.",
+            MAX_SOURCE_BYTES / (1024 * 1024)
+        ),
     );
+    let (picked, upload) = f.new_photo_sizes();
+    if !f.new_photos.is_empty() {
+        muted(ui, theme, format!("New photos: {} → {} to upload.", format_bytes(picked), format_bytes(upload)));
+    }
     field_error(ui, theme, f.error.as_ref(), "photos");
 }
