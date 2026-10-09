@@ -1,5 +1,6 @@
 //! The full-screen map: tiles (walkers + OpenStreetMap), campsite markers and clusters,
-//! the draft pin of the campsite form, and viewport → bbox reporting (ARCHITECTURE §5.5).
+//! the draft pin of the campsite form, the visitor's position ("Locate me"), and
+//! viewport → bbox reporting (ARCHITECTURE §5.5).
 //! The tile attribution is in the map footer (`ui::footer`), next to the legal links.
 
 use egui::{Align2, Button, FontId, Pos2, Rect, Response, RichText, Stroke, Ui, Vec2};
@@ -54,6 +55,7 @@ impl MapView {
             .zoom_with_ctrl(false);
         let (bbox, center, rect, zoom_into) = map
             .show(ui, |ui, response, projector, memory| {
+                draw_my_location(ui, response, projector, state, theme);
                 let zoom_into = draw_markers(ui, response, projector, memory.zoom(), state, theme, actions);
                 let center = projector.unproject(response.rect.center().to_vec2());
                 (viewport(projector, response.rect), center, response.rect, zoom_into)
@@ -112,6 +114,29 @@ fn viewport(projector: &Projector, rect: Rect) -> BBox {
     // Rounded so tiny sub-pixel jitter doesn't count as a viewport change.
     let r = |v: f64| (v * 1e5).round() / 1e5;
     BBox { north: r(nw.y()), west: r(nw.x()), south: r(se.y()), east: r(se.x()) }
+}
+
+/// The visitor's position ("Locate me"): a dot in a circle as wide as the position's accuracy.
+/// Drawn under the campsites, which stay clickable on top of it.
+fn draw_my_location(ui: &Ui, response: &Response, projector: &Projector, state: &AppState, theme: &Theme) {
+    let Some(here) = state.locate.found else { return };
+    let m = &theme.map;
+    let painter = ui.painter().with_clip_rect(response.rect);
+    let position = lat_lon(here.lat, here.lng);
+    let pos = projector.project(position).to_pos2();
+
+    let accuracy = here.accuracy_m as f32 * projector.scale_pixel_per_meter(position);
+    // Past the farthest corner the circle covers the whole map anyway: keep the numbers small.
+    let r = response.rect;
+    let cover = [r.left_top(), r.right_top(), r.left_bottom(), r.right_bottom()]
+        .into_iter()
+        .map(|corner| pos.distance(corner))
+        .fold(0.0, f32::max);
+    if accuracy > m.my_location_radius {
+        painter.circle_filled(pos, accuracy.min(cover + 1.0), m.colors.my_location_accuracy);
+    }
+    let outline = Stroke::new(m.marker_outline_width, m.colors.marker_outline);
+    painter.circle(pos, m.my_location_radius, m.colors.my_location, outline);
 }
 
 /// What is under the pointer: one campsite (index into `state.markers`) or a cluster.

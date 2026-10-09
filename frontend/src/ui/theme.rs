@@ -82,6 +82,8 @@ color_struct!(MapColors {
     label_text,
     attribution_bg,
     attribution_text,
+    my_location,
+    my_location_accuracy,
 });
 
 #[derive(Debug, Clone, Deserialize)]
@@ -125,6 +127,8 @@ pub struct Spacing {
     pub list_indent: f32,
     /// Inner padding of the strip at the bottom-right of the map (legal links, attribution).
     pub map_footer_padding: [f32; 2],
+    /// Gap between the "Locate me" button and the map edge (or the footer under it).
+    pub map_button_margin: f32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -173,6 +177,9 @@ pub struct Layout {
     pub spinner_period_ms: u32,
     /// Widest the privacy notice and the consent panel at the bottom of the map get.
     pub notice_max_width: f32,
+    /// Side of the square "Locate me" button at the bottom-right of the map; at least
+    /// `icon_button_size`, for touch.
+    pub map_button_size: f32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -200,8 +207,10 @@ pub struct MapTheme {
     pub cluster_max_zoom: f64,
     /// Zoom levels added by a click on a cluster.
     pub cluster_zoom_step: f64,
-    /// Minimum zoom when the map centers on a campsite (search result).
+    /// Minimum zoom when the map centers on a campsite (search result) or on the visitor.
     pub focus_zoom: f64,
+    /// The "you are here" dot; its accuracy circle is drawn to scale around it.
+    pub my_location_radius: f32,
     pub colors: MapColors,
 }
 
@@ -379,6 +388,8 @@ mod tests {
         assert!(t.map.focus_zoom <= t.map.max_zoom && t.map.cluster_max_zoom <= t.map.max_zoom);
         assert!(t.layout.spinner_size_inline > 0.0 && t.layout.spinner_size_inline <= t.layout.spinner_size_block);
         assert!(t.layout.spinner_stroke > 0.0 && t.layout.spinner_period_ms > 0);
+        assert!(t.layout.map_button_size >= t.layout.icon_button_size, "the locate button is a touch target");
+        assert!(t.map.my_location_radius > 0.0);
     }
 
     #[test]

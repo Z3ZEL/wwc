@@ -82,7 +82,8 @@
     "top_bar_padding": [16.0, 0.0],
     "photo_gap": 6.0,
     "list_indent": 14.0,
-    "map_footer_padding": [6.0, 2.0]
+    "map_footer_padding": [6.0, 2.0],
+    "map_button_margin": 12.0
   },
 
   "shape": {
@@ -115,7 +116,8 @@
     "spinner_size_block": 32.0,
     "spinner_stroke": 2.5,
     "spinner_period_ms": 900,
-    "notice_max_width": 480.0
+    "notice_max_width": 480.0,
+    "map_button_size": 40.0
   },
 
   "map": {
@@ -131,6 +133,7 @@
     "cluster_max_zoom": 15.0,
     "cluster_zoom_step": 2.0,
     "focus_zoom": 12.0,
+    "my_location_radius": 7.0,
     "colors": {
       "marker": "#E07A2F",
       "marker_own": "#2F7D4F",
@@ -142,7 +145,9 @@
       "label_bg": "#FFFFFFE6",
       "label_text": "#1E2522",
       "attribution_bg": "#FFFFFFCC",
-      "attribution_text": "#1E2522"
+      "attribution_text": "#1E2522",
+      "my_location": "#2563EB",
+      "my_location_accuracy": "#2563EB26"
     }
   }
 }

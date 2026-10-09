@@ -2,6 +2,7 @@
 //! `reduce::apply` (network events). UI code reads it, and may edit form input buffers.
 
 mod forms;
+mod location;
 mod reduce;
 
 pub use forms::{
@@ -9,6 +10,7 @@ pub use forms::{
     PhotoRef, PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem,
     source_problem, tent_capacity_label,
 };
+pub use location::{Locate, LocateError, MyLocation};
 pub use reduce::apply;
 
 use std::collections::BTreeMap;
@@ -216,6 +218,8 @@ pub struct AppState {
     pub search: Search,
     /// A position (lat, lng) the map should center on; taken by the map on its next frame.
     pub map_focus: Option<(f64, f64)>,
+    /// The visitor's position from the "Locate me" button (memory only, never saved).
+    pub locate: Locate,
 
     pub detail: Option<CampsiteDetail>,
 

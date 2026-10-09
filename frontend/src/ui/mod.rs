@@ -2,6 +2,7 @@
 
 pub mod consent_panel;
 pub mod footer;
+pub mod locate_button;
 pub mod notice;
 pub mod panels;
 pub mod photo_viewer;

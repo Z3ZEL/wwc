@@ -176,6 +176,31 @@ pub fn apply(state: &mut AppState, event: Event) -> Vec<Action> {
             }
         }
 
+        Event::Located(result) => {
+            state.locate.pending = false;
+            let automatic = std::mem::take(&mut state.locate.automatic);
+            match result {
+                Ok(location) => {
+                    state.locate.found = Some(location);
+                    state.map_focus = Some((location.lat, location.lng));
+                }
+                Err(e) => {
+                    state.locate.found = None;
+                    // On page load nobody clicked: the map just stays where it is.
+                    if !automatic {
+                        state.toast(ToastKind::Error, e.message());
+                    }
+                }
+            }
+        }
+        Event::LocationPermission(granted) => {
+            // Skip it if the visitor clicked "Locate me" in the meantime.
+            if granted && !state.locate.pending && state.locate.found.is_none() {
+                state.locate.automatic = true;
+                return vec![Action::Locate];
+            }
+        }
+
         Event::CampsiteSaved { created, result } => {
             state.campsite_form.submitting = false;
             match result {
@@ -517,5 +542,55 @@ mod tests {
         let follow = apply(&mut s, Event::CampsiteDeleted { id: "a".into(), result: Ok(()) });
         assert!(s.panel.is_none());
         assert!(follow.contains(&Action::RefreshCount));
+    }
+
+    #[test]
+    fn a_found_position_centers_the_map_and_a_failure_clears_it() {
+        use crate::state::{LocateError, MyLocation};
+
+        let mut s = AppState::default();
+        s.locate.pending = true;
+        let here = MyLocation { lat: 45.0, lng: 6.0, accuracy_m: 30.0 };
+        apply(&mut s, Event::Located(Ok(here)));
+        assert!(!s.locate.pending);
+        assert_eq!(s.locate.found, Some(here));
+        assert_eq!(s.map_focus, Some((45.0, 6.0)));
+
+        s.locate.pending = true;
+        s.map_focus = None;
+        apply(&mut s, Event::Located(Err(LocateError::Denied)));
+        assert!(!s.locate.pending);
+        assert_eq!(s.locate.found, None, "no stale dot after a failed request");
+        assert_eq!(s.map_focus, None);
+        assert_eq!(s.toasts.last().map(|t| t.kind), Some(ToastKind::Error));
+    }
+
+    #[test]
+    fn page_load_locates_only_when_access_was_already_granted() {
+        let mut s = AppState::default();
+        assert!(apply(&mut s, Event::LocationPermission(false)).is_empty());
+        assert!(!s.locate.automatic);
+
+        assert_eq!(apply(&mut s, Event::LocationPermission(true)), vec![Action::Locate]);
+        assert!(s.locate.automatic);
+
+        // The visitor clicked "Locate me" before the check came back: no second request.
+        let mut s = AppState::default();
+        s.locate.pending = true;
+        assert!(apply(&mut s, Event::LocationPermission(true)).is_empty());
+        assert!(!s.locate.automatic);
+    }
+
+    #[test]
+    fn a_failed_automatic_locate_is_silent() {
+        use crate::state::LocateError;
+
+        let mut s = AppState::default();
+        s.locate.pending = true;
+        s.locate.automatic = true;
+        apply(&mut s, Event::Located(Err(LocateError::Timeout)));
+        assert!(s.toasts.is_empty());
+        assert!(!s.locate.automatic, "the next click reports its errors");
+        assert!(!s.locate.pending);
     }
 }

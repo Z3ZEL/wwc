@@ -14,7 +14,7 @@ use crate::map::MapView;
 use crate::seo::SeoTitles;
 use crate::state::{self, AppState};
 use crate::ui::theme::Theme;
-use crate::ui::{consent_panel, footer, notice, panels, photo_viewer, top_bar, widgets};
+use crate::ui::{consent_panel, footer, locate_button, notice, panels, photo_viewer, top_bar, widgets};
 
 /// Browser storage keys (localStorage), all listed in the Privacy Policy. `wwc_consent` is
 /// only used while consent is enabled (§5.12).
@@ -75,7 +75,8 @@ impl WwcApp {
             page_title: String::new(),
             password_keyboard: false,
         };
-        for action in [Action::RefreshSession, Action::RefreshCount, Action::LoadTags] {
+        for action in [Action::RefreshSession, Action::RefreshCount, Action::LoadTags, Action::CheckLocationPermission]
+        {
             app.controller.handle(&mut app.state, action);
         }
         app
@@ -104,11 +105,12 @@ impl eframe::App for WwcApp {
             let footer = footer::show(ui.ctx(), map_rect, theme, &mut actions);
             let above_footer = footer.map_or(map_rect, |f| map_rect.with_max_y(f.top()));
             // Once consent is enabled, its panel replaces the notice (which says there are no analytics).
-            if consent::config().enabled {
-                consent_panel::show(ui.ctx(), above_footer, state, theme, &mut actions);
+            let card = if consent::config().enabled {
+                consent_panel::show(ui.ctx(), above_footer, state, theme, &mut actions)
             } else {
-                notice::show(ui.ctx(), above_footer, state, theme, &mut actions);
-            }
+                notice::show(ui.ctx(), above_footer, state, theme, &mut actions)
+            };
+            locate_button::show(ui.ctx(), above_footer, card, state, theme, &mut actions);
         }
         photo_viewer::show(ui.ctx(), state, theme);
         widgets::toasts(ui.ctx(), theme, &mut state.toasts);
