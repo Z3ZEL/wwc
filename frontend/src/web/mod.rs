@@ -2,8 +2,10 @@
 
 mod file_picker;
 mod photo;
+mod text_agent;
 
 pub use file_picker::pick_photos;
+pub use text_agent::set_password_mode;
 
 /// Wall-clock time in ms since the Unix epoch.
 pub fn now_ms() -> f64 {

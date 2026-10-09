@@ -31,6 +31,8 @@ pub struct WwcApp {
     seo: SeoTitles,
     /// Last value written to `document.title`.
     page_title: String,
+    /// Whether the text agent was last switched to a password input (ADR 0018).
+    password_keyboard: bool,
 }
 
 impl WwcApp {
@@ -63,7 +65,16 @@ impl WwcApp {
         };
         let map = MapView::new(&cc.egui_ctx, &theme);
 
-        let mut app = Self { state, theme, controller, events, map, seo: SeoTitles::load(), page_title: String::new() };
+        let mut app = Self {
+            state,
+            theme,
+            controller,
+            events,
+            map,
+            seo: SeoTitles::load(),
+            page_title: String::new(),
+            password_keyboard: false,
+        };
         for action in [Action::RefreshSession, Action::RefreshCount, Action::LoadTags] {
             app.controller.handle(&mut app.state, action);
         }
@@ -73,7 +84,7 @@ impl WwcApp {
 
 impl eframe::App for WwcApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let Self { state, theme, controller, events, map, seo, page_title } = self;
+        let Self { state, theme, controller, events, map, seo, page_title, password_keyboard } = self;
 
         let mut actions = Vec::new();
         while let Ok(event) = events.try_recv() {
@@ -110,6 +121,15 @@ impl eframe::App for WwcApp {
         if *page_title != title {
             crate::web::set_document_title(&title);
             *page_title = title;
+        }
+
+        // Phone keyboards compose words, which eframe ignores in password fields: give them a
+        // password input instead. Touch screens only, desktop typing already works (ADR 0018).
+        let password = ui.ctx().input(|i| i.has_touch_screen())
+            && ui.ctx().output(|o| o.ime.is_some_and(|ime| ime.purpose == egui::IMEPurpose::Password));
+        if *password_keyboard != password {
+            crate::web::set_password_mode(password);
+            *password_keyboard = password;
         }
     }
 

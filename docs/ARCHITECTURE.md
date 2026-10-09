@@ -99,7 +99,7 @@ wwc/
 │       ├── documents/         # documents.json manifest + vars, Markdown → blocks parser (host-tested)
 │       ├── consent.rs         # consent.json + consent records: validity, expiry, `allows` (host-tested)
 │       ├── media/             # photo upload settings + lossless metadata stripping (host-tested)
-│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title), wasm only
+│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title, password keyboard), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
@@ -272,7 +272,7 @@ Shorthands used below (write them out in full in the real rules):
 ### 5.1 Constraints to keep in mind
 
 - egui is **immediate mode**: the UI is redrawn every frame from state. UI code must be **cheap and side-effect free** except for emitting actions.
-- It renders to a **single `<canvas>`**: no DOM, weak SEO and accessibility, and mobile text input is limited. Accept this; don't fight it with DOM hacks unless an ADR says so.
+- It renders to a **single `<canvas>`**: no DOM, weak SEO and accessibility, and mobile text input is limited. Accept this; don't fight it with DOM hacks unless an ADR says so (ADR 0018: password fields on phones).
 - Wasm is **single-threaded** here: never block. No `std::thread`, no `std::time::Instant` (use `web-time` or `instant`), no blocking I/O.
 - Only `wasm32-unknown-unknown` is a target. Don't add `#[cfg(not(target_arch = "wasm32"))]` desktop paths — except in unit tests of pure logic (§9).
 
@@ -586,6 +586,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0015 — Full GitHub Releases trigger the Render frontend deploy hook (`DEPLOY_HOOK` secret) after the backend image is pushed.
 - 0016 — Legal pages as in-app Markdown documents (`assets/documents/`, fetched on demand, `{{vars}}` in a compiled-in manifest), map footer, sign-up consent checkbox, informative privacy notice instead of a consent banner; a consent panel ready for analytics, disabled until then.
 - 0017 — Photos are re-encoded in the browser before upload (2048 px, WebP or JPEG), which removes their metadata; lossless `strip_metadata` as a safety net and fallback; photos whose metadata can't be removed are refused.
+- 0018 — Password fields on phones: eframe's hidden text input is hidden with CSS and switched to `type="password"` while a password field is focused on touch screens, so phone keyboards send plain keystrokes.
 
 ---
 
