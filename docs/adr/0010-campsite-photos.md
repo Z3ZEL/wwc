@@ -1,6 +1,7 @@
 # 0010 — Campsite photos
 
-Status: accepted (2026-09-26)
+Status: accepted (2026-09-26). Amended by ADR 0017: photos are now resized and stripped of their metadata
+in the browser before upload.
 
 ## Context
 Campsite owners should be able to add up to 3 photos, shown at the top of the Campsite panel.

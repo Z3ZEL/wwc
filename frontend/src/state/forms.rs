@@ -13,16 +13,24 @@ pub const MAX_PHOTOS: usize = 3;
 pub const MAX_PHOTO_BYTES: u64 = 10 * 1024 * 1024;
 pub const PHOTO_MIME_TYPES: [&str; 3] = ["image/jpeg", "image/png", "image/webp"];
 
-/// A file chosen in the browser's file picker. `bytes` is empty when the file was
-/// refused before reading it (see `photo_problem`).
+/// Largest file the picker reads. Picked photos are shrunk before upload (ADR 0017), so an
+/// original may exceed `MAX_PHOTO_BYTES`; this only keeps huge files out of wasm memory.
+pub const MAX_SOURCE_BYTES: u64 = 40 * 1024 * 1024;
+
+/// A file chosen in the browser's file picker, ready to upload: re-encoded without its
+/// metadata (`media`, `web/photo.rs`). `name` and `mime` are the processed file's. `bytes` is
+/// empty when the file was refused (`problem`, or see `source_problem`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PickedPhoto {
     pub name: String,
     pub mime: String,
-    pub size: u64,
+    /// Size of the file as picked, before processing.
+    pub original_size: u64,
     pub bytes: ImageBytes,
     /// Small image made by the browser for the form preview (`None` if that failed).
     pub preview: Option<ImageBytes>,
+    /// Why the picker couldn't prepare the file (unreadable, metadata couldn't be removed…).
+    pub problem: Option<String>,
 }
 
 /// A photo that will be uploaded on save.
@@ -31,6 +39,8 @@ pub struct NewPhoto {
     /// Unique for the app's lifetime: it keys the preview in egui's image cache.
     pub id: u64,
     pub upload: PhotoUpload,
+    /// Size of the file as picked (`upload` is usually much smaller).
+    pub original_size: u64,
     pub preview: Option<ImageBytes>,
 }
 
@@ -41,12 +51,23 @@ pub enum PhotoRef {
     New(u64),
 }
 
-/// Why a picked file can't be uploaded, if it can't.
+/// Why a picked file can't even be read, if it can't (checked before processing it).
+pub fn source_problem(name: &str, mime: &str, size: u64) -> Option<String> {
+    if !PHOTO_MIME_TYPES.contains(&mime) {
+        Some(format!("{name}: only JPEG, PNG and WebP images are allowed."))
+    } else if size > MAX_SOURCE_BYTES {
+        Some(format!("{name}: photos are limited to {} MB.", MAX_SOURCE_BYTES / (1024 * 1024)))
+    } else {
+        None
+    }
+}
+
+/// Why a processed file can't be uploaded, if it can't.
 pub fn photo_problem(name: &str, mime: &str, size: u64) -> Option<String> {
     if !PHOTO_MIME_TYPES.contains(&mime) {
         Some(format!("{name}: only JPEG, PNG and WebP images are allowed."))
     } else if size > MAX_PHOTO_BYTES {
-        Some(format!("{name}: photos are limited to {} MB.", MAX_PHOTO_BYTES / (1024 * 1024)))
+        Some(format!("{name}: this photo is still over {} MB once compressed.", MAX_PHOTO_BYTES / (1024 * 1024)))
     } else {
         None
     }
@@ -180,14 +201,21 @@ impl CampsiteForm {
     pub fn add_picked(&mut self, picked: Vec<PickedPhoto>, next_id: &mut u64) -> Vec<String> {
         let mut problems = Vec::new();
         for p in picked {
-            if let Some(problem) = photo_problem(&p.name, &p.mime, p.size) {
+            let size = u64::try_from(p.bytes.len()).unwrap_or(u64::MAX);
+            if let Some(problem) = p.problem.or_else(|| source_problem(&p.name, &p.mime, p.original_size)) {
                 problems.push(problem);
             } else if self.free_photo_slots() == 0 {
+                // The picker doesn't read files beyond the free slots: they come without bytes.
                 problems.push(format!("{}: a campsite can have at most {MAX_PHOTOS} photos.", p.name));
+            } else if p.bytes.is_empty() {
+                problems.push(format!("{}: the file could not be read.", p.name));
+            } else if let Some(problem) = photo_problem(&p.name, &p.mime, size) {
+                problems.push(problem);
             } else {
                 *next_id += 1;
                 let upload = PhotoUpload { name: p.name, mime: p.mime, bytes: p.bytes };
-                self.new_photos.push(NewPhoto { id: *next_id, upload, preview: p.preview });
+                let original_size = p.original_size;
+                self.new_photos.push(NewPhoto { id: *next_id, upload, original_size, preview: p.preview });
                 self.dirty = true;
             }
         }
@@ -208,6 +236,13 @@ impl CampsiteForm {
                 self.dirty |= self.new_photos.len() != before;
             }
         }
+    }
+
+    /// Total size of the new photos as picked, and as they will be uploaded.
+    pub fn new_photo_sizes(&self) -> (u64, u64) {
+        self.new_photos.iter().fold((0, 0), |(picked, upload), p| {
+            (picked + p.original_size, upload + u64::try_from(p.upload.bytes.len()).unwrap_or(u64::MAX))
+        })
     }
 
     /// The files to send with the save request.
@@ -329,8 +364,9 @@ mod tests {
         assert_eq!(input.tent_capacity, 10);
     }
 
-    fn picked(name: &str, mime: &str, size: u64) -> PickedPhoto {
-        PickedPhoto { name: name.into(), mime: mime.into(), size, bytes: vec![0; 4].into(), preview: None }
+    fn picked(name: &str, mime: &str, original_size: u64) -> PickedPhoto {
+        let bytes = vec![0; 4].into();
+        PickedPhoto { name: name.into(), mime: mime.into(), original_size, bytes, preview: None, problem: None }
     }
 
     #[test]
@@ -340,8 +376,9 @@ mod tests {
         let problems = form.add_picked(
             vec![
                 picked("a.gif", "image/gif", 10),
-                picked("huge.jpg", "image/jpeg", MAX_PHOTO_BYTES + 1),
-                picked("b.jpg", "image/jpeg", 10),
+                picked("huge.jpg", "image/jpeg", MAX_SOURCE_BYTES + 1),
+                // Over the upload limit as picked, but small once processed.
+                picked("b.jpg", "image/jpeg", MAX_PHOTO_BYTES * 2),
                 picked("c.png", "image/png", 10),
                 picked("d.webp", "image/webp", 10),
             ],
@@ -353,6 +390,30 @@ mod tests {
         assert_eq!(form.free_photo_slots(), 0);
         assert_eq!(form.new_photos.iter().map(|p| p.id).collect::<Vec<_>>(), [1, 2]);
         assert!(form.dirty);
+    }
+
+    #[test]
+    fn photos_the_picker_could_not_prepare_are_refused() {
+        let mut form = CampsiteForm::default();
+        let unreadable = PickedPhoto { bytes: ImageBytes::default(), ..picked("a.jpg", "image/jpeg", 10) };
+        let with_problem = PickedPhoto { problem: Some("b.jpg: metadata".into()), ..picked("b.jpg", "image/jpeg", 10) };
+        let still_big = PickedPhoto {
+            bytes: vec![0; usize::try_from(MAX_PHOTO_BYTES + 1).expect("fits")].into(),
+            ..picked("c.webp", "image/webp", 10)
+        };
+        let problems = form.add_picked(vec![unreadable, with_problem, still_big], &mut 0);
+        assert_eq!(problems.len(), 3, "{problems:?}");
+        assert_eq!(problems[1], "b.jpg: metadata");
+        assert!(form.new_photos.is_empty());
+        assert!(!form.dirty);
+    }
+
+    #[test]
+    fn new_photo_sizes_add_up_before_and_after_processing() {
+        let mut form = CampsiteForm::default();
+        assert_eq!(form.new_photo_sizes(), (0, 0));
+        form.add_picked(vec![picked("a.jpg", "image/jpeg", 1000), picked("b.jpg", "image/jpeg", 500)], &mut 0);
+        assert_eq!(form.new_photo_sizes(), (1500, 8));
     }
 
     #[test]

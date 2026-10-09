@@ -5,9 +5,9 @@ mod forms;
 mod reduce;
 
 pub use forms::{
-    CampsiteForm, ConsentPanel, LoginForm, MAX_PHOTO_BYTES, MAX_PHOTOS, NewPhoto, PHOTO_MIME_TYPES, PhotoRef,
-    PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem,
-    tent_capacity_label,
+    CampsiteForm, ConsentPanel, LoginForm, MAX_PHOTO_BYTES, MAX_PHOTOS, MAX_SOURCE_BYTES, NewPhoto, PHOTO_MIME_TYPES,
+    PhotoRef, PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem,
+    source_problem, tent_capacity_label,
 };
 pub use reduce::apply;
 

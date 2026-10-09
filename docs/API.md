@@ -58,6 +58,8 @@ Indexes: `(lat, lng)`, `(author)`.
 `photos+`/`photos-` from admins (the same as any non-`hidden` change). When photos change, the frontend sends
 one `multipart/form-data` request: a `@jsonPayload` part holds the usual JSON body (with `"photos-": [filenames]`
 to delete), plus one `photos+` part per new file. A save without new files stays plain JSON (`photos-` works there too).
+The app uploads photos re-encoded by the browser (2048 px at most, WebP or JPEG) with their metadata removed
+(ADR 0017). The server doesn't enforce this: the rules still accept any JPEG/PNG/WebP up to 10 MB.
 Files are public: `GET /api/files/{collectionId}/{campsiteId}/{filename}?thumb=320x240|1200x1200f`. The frontend
 never loads originals. See ADR 0010.
 
