@@ -10,11 +10,12 @@ use crate::api::models::Session;
 use crate::config;
 use crate::consent::{self, ConsentRecord};
 use crate::controller::Controller;
+use crate::documents;
 use crate::map::MapView;
 use crate::seo::SeoTitles;
 use crate::state::{self, AppState};
 use crate::ui::theme::Theme;
-use crate::ui::{consent_panel, footer, locate_button, notice, panels, photo_viewer, top_bar, widgets};
+use crate::ui::{consent_panel, footer, locate_button, notice, panels, photo_viewer, top_bar, welcome_card, widgets};
 
 /// Browser storage keys (localStorage), all listed in the Privacy Policy. `wwc_consent` is
 /// only used while consent is enabled (§5.12).
@@ -33,6 +34,8 @@ pub struct WwcApp {
     page_title: String,
     /// Whether the text agent was last switched to a password input (ADR 0018).
     password_keyboard: bool,
+    /// Where the welcome card was drawn last frame: the map's zoom buttons go on its right.
+    welcome_card: Option<egui::Rect>,
 }
 
 impl WwcApp {
@@ -74,9 +77,15 @@ impl WwcApp {
             seo: SeoTitles::load(),
             page_title: String::new(),
             password_keyboard: false,
+            welcome_card: None,
         };
-        for action in [Action::RefreshSession, Action::RefreshCount, Action::LoadTags, Action::CheckLocationPermission]
-        {
+        for action in [
+            Action::RefreshSession,
+            Action::RefreshCount,
+            Action::LoadTags,
+            Action::CheckLocationPermission,
+            Action::LoadDocument(documents::WELCOME.to_owned()),
+        ] {
             app.controller.handle(&mut app.state, action);
         }
         app
@@ -85,7 +94,8 @@ impl WwcApp {
 
 impl eframe::App for WwcApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let Self { state, theme, controller, events, map, seo, page_title, password_keyboard } = self;
+        let Self { state, theme, controller, events, map, seo, page_title, password_keyboard, welcome_card: card_rect } =
+            self;
 
         let mut actions = Vec::new();
         while let Ok(event) = events.try_recv() {
@@ -96,11 +106,12 @@ impl eframe::App for WwcApp {
         panels::show(ui, state, theme, &mut actions);
         let map_rect = egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme.colors.background))
-            .show(ui, |ui| map.show(ui, state, theme, &mut actions))
+            .show(ui, |ui| map.show(ui, state, theme, *card_rect, &mut actions))
             .response
             .rect;
         // On narrow screens an open panel covers the map (egui still leaves it a sliver).
         let narrow = ui.ctx().content_rect().width() < theme.layout.narrow_breakpoint;
+        let mut welcome = None;
         if !(narrow && state.panel.is_some()) {
             let footer = footer::show(ui.ctx(), map_rect, theme, &mut actions);
             let above_footer = footer.map_or(map_rect, |f| map_rect.with_max_y(f.top()));
@@ -110,7 +121,13 @@ impl eframe::App for WwcApp {
             } else {
                 notice::show(ui.ctx(), above_footer, state, theme, &mut actions)
             };
+            welcome = welcome_card::show(ui.ctx(), above_footer, card, state, theme, &mut actions);
             locate_button::show(ui.ctx(), above_footer, card, state, theme, &mut actions);
+        }
+        // The zoom buttons follow the card one frame later: draw that frame now.
+        if *card_rect != welcome {
+            *card_rect = welcome;
+            ui.ctx().request_repaint();
         }
         photo_viewer::show(ui.ctx(), state, theme);
         widgets::toasts(ui.ctx(), theme, &mut state.toasts);

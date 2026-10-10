@@ -1,0 +1,12 @@
+[package]
+name = "changelog-gen"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Trunk post_build hook: writes the latest GitHub Releases into releases.json for the app's Updates tab"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Already in the tree through ehttp's native backend (same version, default features: rustls + gzip).
+ureq = "3.4"

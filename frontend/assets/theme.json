@@ -57,7 +57,9 @@
     "photo_selected": "#E07A2F",
 
     "spinner": "#2F7D4F",
-    "spinner_track": "#E3EFE7"
+    "spinner_track": "#E3EFE7",
+
+    "welcome_bg": "#FFFFFFCC"
   },
 
   "typography": {
@@ -117,7 +119,9 @@
     "spinner_stroke": 2.5,
     "spinner_period_ms": 900,
     "notice_max_width": 480.0,
-    "map_button_size": 40.0
+    "map_button_size": 40.0,
+    "welcome_width": 360.0,
+    "welcome_max_height": 600.0
   },
 
   "map": {
@@ -134,6 +138,8 @@
     "cluster_zoom_step": 2.0,
     "focus_zoom": 12.0,
     "my_location_radius": 7.0,
+    "zoom_button_size": 28.0,
+    "zoom_button_gap": 4.0,
     "colors": {
       "marker": "#E07A2F",
       "marker_own": "#2F7D4F",

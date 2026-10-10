@@ -68,6 +68,7 @@ color_struct!(Colors {
     photo_selected,
     spinner,
     spinner_track,
+    welcome_bg,
 });
 
 color_struct!(MapColors {
@@ -127,7 +128,8 @@ pub struct Spacing {
     pub list_indent: f32,
     /// Inner padding of the strip at the bottom-right of the map (legal links, attribution).
     pub map_footer_padding: [f32; 2],
-    /// Gap between the "Locate me" button and the map edge (or the footer under it).
+    /// Gap between the map controls (zoom and "Locate me" buttons, welcome card) and the map
+    /// edge, the footer, or each other.
     pub map_button_margin: f32,
 }
 
@@ -180,6 +182,11 @@ pub struct Layout {
     /// Side of the square "Locate me" button at the bottom-right of the map; at least
     /// `icon_button_size`, for touch.
     pub map_button_size: f32,
+    /// Widest the welcome card at the top-left of the map gets; it shrinks so the zoom
+    /// buttons always fit on its right.
+    pub welcome_width: f32,
+    /// Tallest the welcome card gets; its text scrolls beyond that.
+    pub welcome_max_height: f32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -211,6 +218,9 @@ pub struct MapTheme {
     pub focus_zoom: f64,
     /// The "you are here" dot; its accuracy circle is drawn to scale around it.
     pub my_location_radius: f32,
+    /// The +/− buttons, right of the welcome card: side, and the gap between them.
+    pub zoom_button_size: f32,
+    pub zoom_button_gap: f32,
     pub colors: MapColors,
 }
 
@@ -390,6 +400,8 @@ mod tests {
         assert!(t.layout.spinner_stroke > 0.0 && t.layout.spinner_period_ms > 0);
         assert!(t.layout.map_button_size >= t.layout.icon_button_size, "the locate button is a touch target");
         assert!(t.map.my_location_radius > 0.0);
+        assert!(t.map.zoom_button_size > 0.0 && t.map.zoom_button_gap >= 0.0);
+        assert!(t.layout.welcome_max_height > t.layout.icon_button_size, "the welcome card has room for its tabs");
     }
 
     #[test]
@@ -405,6 +417,9 @@ mod tests {
             ("toast_text/toast_bg", c.toast_text, c.toast_bg),
             ("photo_viewer_text/photo_viewer_bg", c.photo_viewer_text, c.photo_viewer_bg),
             ("tag_selected_text/tag_selected_bg", c.tag_selected_text, c.tag_selected_bg),
+            // Semi-transparent over the map: its color without the alpha must be readable already.
+            ("text/welcome_bg", c.text, c.welcome_bg.to_opaque()),
+            ("text_muted/welcome_bg", c.text_muted, c.welcome_bg.to_opaque()),
         ] {
             let ratio = contrast_ratio(fg, bg);
             assert!(ratio >= 4.5, "{name} contrast is {ratio:.2}, needs >= 4.5");

@@ -7,8 +7,8 @@ mod reduce;
 
 pub use forms::{
     CampsiteForm, ConsentPanel, LoginForm, MAX_PHOTO_BYTES, MAX_PHOTOS, MAX_SOURCE_BYTES, NewPhoto, PHOTO_MIME_TYPES,
-    PhotoRef, PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem,
-    source_problem, tent_capacity_label,
+    PhotoRef, PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, WelcomeCard,
+    WelcomeTab, photo_problem, source_problem, tent_capacity_label,
 };
 pub use location::{Locate, LocateError, MyLocation};
 pub use reduce::apply;
@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use crate::actions::ToastKind;
 use crate::api::models::{Campsite, CampsiteMarker, CampsiteStats, Comment, Rating, ReportTarget, Session, Tag};
 use crate::api::{ApiError, BBox, CampsiteFilter};
+use crate::changelog::Release;
 use crate::consent::{self, ConsentRecord};
 use crate::documents::Block;
 
@@ -232,6 +233,10 @@ pub struct AppState {
     /// used while `consent.json` enables consent (§5.12).
     pub consent: Option<ConsentRecord>,
     pub consent_panel: ConsentPanel,
+    /// The welcome card over the map: open tab, collapsed or not (memory only).
+    pub welcome: WelcomeCard,
+    /// Release notes for the card's Updates tab, fetched the first time it is shown.
+    pub changelog: Remote<Vec<Release>>,
 
     pub login: LoginForm,
     pub register: RegisterForm,

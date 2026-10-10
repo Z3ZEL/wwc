@@ -10,6 +10,8 @@ mod profile;
 mod report;
 mod search;
 
+pub use document::body as document_body;
+
 use egui::{RichText, Ui};
 
 use crate::actions::Action;

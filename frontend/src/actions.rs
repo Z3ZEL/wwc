@@ -6,7 +6,7 @@ use crate::api::models::{
     AuthResponse, Campsite, CampsiteMarker, CampsiteStats, Comment, ListResponse, Rating, Report, Tag, User,
 };
 use crate::api::{ApiError, BBox};
-use crate::state::{LocateError, MyLocation, Panel, PhotoRef, PickedPhoto};
+use crate::state::{LocateError, MyLocation, Panel, PhotoRef, PickedPhoto, WelcomeTab};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -82,6 +82,12 @@ pub enum Action {
     /// Close the reopened consent panel without changing anything.
     CloseConsent,
     SaveConsent(ConsentChoice),
+    /// Welcome card: show a tab. The first time Updates is shown, the release notes are fetched.
+    WelcomeTab(WelcomeTab),
+    /// Welcome card: collapse it to a small button (`true`) or expand it.
+    CollapseWelcome(bool),
+    /// Fetch the release notes again (Retry).
+    LoadChangelog,
 
     Toast(String, ToastKind),
 }
@@ -184,4 +190,6 @@ pub enum Event {
         id: String,
         result: ApiResult<String>,
     },
+    /// `releases.json`, the release notes of the Updates tab.
+    Changelog(ApiResult<String>),
 }

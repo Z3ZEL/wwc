@@ -119,6 +119,41 @@ pub struct ConsentPanel {
     pub choices: BTreeSet<String>,
 }
 
+/// The welcome card at the top-left of the map (ARCHITECTURE §5.6). Memory only: it opens
+/// the same way on every visit.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct WelcomeCard {
+    pub tab: WelcomeTab,
+    /// `None` until the visitor collapses or expands it: open on wide screens, collapsed on phones.
+    pub collapsed: Option<bool>,
+}
+
+impl WelcomeCard {
+    pub fn is_collapsed(&self, narrow: bool) -> bool {
+        self.collapsed.unwrap_or(narrow)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WelcomeTab {
+    /// The `welcome` document.
+    #[default]
+    Welcome,
+    /// The latest releases (`changelog`).
+    Updates,
+}
+
+impl WelcomeTab {
+    pub const ALL: [Self; 2] = [Self::Welcome, Self::Updates];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Welcome => "Welcome",
+            Self::Updates => "Updates",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ProfileForm {
     pub name: String,

@@ -5,7 +5,7 @@
 use crate::actions::{Action, Event, ToastKind};
 use crate::api::ApiError;
 use crate::api::models::Session;
-use crate::documents;
+use crate::{changelog, documents};
 
 use super::{AppState, CampsiteForm, Panel, Remote};
 
@@ -331,6 +331,13 @@ pub fn apply(state: &mut AppState, event: Event) -> Vec<Action> {
             let doc = result.map(|text| documents::manifest().prepare(&text));
             state.documents.insert(id, doc.into());
         }
+        Event::Changelog(result) => {
+            state.changelog = match result.and_then(|json| changelog::parse(&json)) {
+                // No file (a static host's HTML fallback): nothing to show yet.
+                Err(e) if e.is_not_found() => Remote::Loaded(vec![]),
+                r => r.into(),
+            };
+        }
     }
     vec![]
 }
@@ -520,6 +527,24 @@ mod tests {
         assert!(s.campsite_form.dirty);
         assert_eq!(s.toasts.len(), 1);
         assert_eq!(s.toasts[0].kind, ToastKind::Error);
+    }
+
+    #[test]
+    fn release_notes_are_parsed() {
+        let mut s = AppState::default();
+        let json = r#"{"releases": [{"tag": "v1", "title": "First", "date": "2026-10-10", "notes": "* one"}]}"#;
+        apply(&mut s, Event::Changelog(Ok(json.into())));
+        let Remote::Loaded(releases) = &s.changelog else { panic!("{:?}", s.changelog) };
+        assert_eq!(releases[0].title, "First");
+        assert!(matches!(releases[0].notes[..], [crate::documents::Block::List { .. }]));
+
+        // A missing file is an empty list; a network error or a broken file can be retried.
+        apply(&mut s, Event::Changelog(Err(ApiError::from_response(404, b""))));
+        assert_eq!(s.changelog, Remote::Loaded(vec![]));
+        apply(&mut s, Event::Changelog(Err(ApiError::network("offline"))));
+        assert!(matches!(s.changelog, Remote::Failed(_)));
+        apply(&mut s, Event::Changelog(Ok("{".into())));
+        assert!(matches!(s.changelog, Remote::Failed(_)));
     }
 
     #[test]

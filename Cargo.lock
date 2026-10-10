@@ -359,6 +359,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "changelog-gen"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "clipboard-win"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
