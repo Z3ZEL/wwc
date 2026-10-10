@@ -1,6 +1,6 @@
 # Architecture Guidelines
 
-> Status: **v0.8** (2026-10-01). This is the reference that agents and humans follow when building the app.
+> Status: **v0.9** (2026-10-10). This is the reference that agents and humans follow when building the app.
 > The MVP is implemented. §13 lists what exists and what is deferred.
 > If you need to break a rule here, update this document in the same change and explain why in an ADR (see §12).
 
@@ -83,12 +83,13 @@ wwc/
 │   ├── assets/seo/            # favicon.svg, og-image.svg/.png (social preview)
 │   ├── assets/documents/      # Markdown documents shown in the app (legal pages…) + documents.json — see §5.11
 │   ├── assets/consent.json    # Consent panel settings and purposes (disabled until analytics exist) — see §5.12
-│   ├── tests/fixtures/        # Recorded PocketBase JSON for DTO tests
+│   ├── assets/updates.json    # Release notes settings (repo, how many, prereleases) for tools/changelog-gen — see §5.6
+│   ├── tests/fixtures/        # Recorded PocketBase JSON for DTO tests; releases.json (changelog-gen's output contract)
 │   └── src/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
 │       ├── lib.rs             # module tree; `app` and `map` are wasm-only
 │       ├── app.rs             # impl eframe::App — frame loop + session persistence
-│       ├── config.rs          # build-time config (WWC_API_URL)
+│       ├── config.rs          # build-time config (WWC_API_URL, WWC_BUILD_ID)
 │       ├── actions.rs         # Action (UI intent) + Event (API result) enums
 │       ├── controller.rs      # Action -> state change / API request
 │       ├── state/             # AppState, Panel, Remote, form drafts, pure `apply(event)` + tests
@@ -97,6 +98,7 @@ wwc/
 │       │                      # cluster.rs: pure screen-space marker clustering (host-tested)
 │       ├── seo.rs             # browser tab title from seo.json
 │       ├── documents/         # documents.json manifest + vars, Markdown → blocks parser (host-tested)
+│       ├── changelog.rs       # releases.json → release notes for the welcome card's Updates tab (host-tested)
 │       ├── consent.rs         # consent.json + consent records: validity, expiry, `allows` (host-tested)
 │       ├── media/             # photo upload settings + lossless metadata stripping (host-tested)
 │       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title, password keyboard, geolocation), wasm only
@@ -107,10 +109,12 @@ wwc/
 │           ├── notice.rs      # privacy notice at the bottom of the map
 │           ├── consent_panel.rs # consent panel (replaces the notice once consent is enabled)
 │           ├── locate_button.rs # "Locate me" button at the bottom-right of the map
+│           ├── welcome_card.rs  # welcome card at the top-left of the map: Welcome + Updates tabs
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters, document
-│           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider, markdown
+│           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider, markdown, tabs
 ├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
 │                              # (+ warns about placeholder values in documents.json)
+├── tools/changelog-gen/     # host binary run by Trunk post_build: latest GitHub Releases → releases.json (ADR 0020)
 ├── backend/
 │   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
 │   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
@@ -308,7 +312,7 @@ Rules:
 
 ### 5.3 State shape (starting point)
 
-See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `locate` (the "Locate me" request and the last position found, memory only), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `toasts`.
+See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `locate` (the "Locate me" request and the last position found, memory only), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `welcome` (the welcome card's open tab and collapsed state, memory only) + `changelog` (the release notes, fetched the first time the Updates tab is shown), `toasts`.
 The walkers tile cache and map memory are not in `AppState`; they live in `map::MapView`, owned by the app.
 
 - **Routing (not implemented yet — panel state is in memory only):** there is one page (the map). The "route" is the active side panel. Sync `panel` with the URL hash so links are shareable and back/forward work: `#/` (none), `#/login`, `#/register`, `#/profile`, `#/new`, `#/campsite/<id>`, `#/campsite/<id>/edit`, `#/moderation`. Read the hash on startup. Unknown hash → `#/`. An auth-only panel opened while logged out → login panel, then back to the requested panel after login.
@@ -331,7 +335,7 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 - Markers are painted in the `Map::show` closure (`map/view.rs`); clicking one emits `Action::OpenPanel(Panel::Campsite(id))`. Markers are colored by state: normal, your own, selected.
 - **Clustering** (`map/cluster.rs`): below `map.cluster_max_zoom`, markers closer than `map.cluster_distance` points on screen are drawn as one circle with a count (radius `cluster_radius`…`cluster_radius_max`). Clicking a cluster centers on it and zooms in by `cluster_zoom_step`. The selected campsite is always drawn alone. The grouping only uses relative screen positions, so panning doesn't change it.
 - `AppState.map_focus`: set by `Action::FocusCampsite` (a search result click). The map takes it on its next frame, centers there and zooms in to at least `map.focus_zoom`.
-- Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons sit in the top-left corner. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
+- Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons (`map.zoom_button_size`, `zoom_button_gap`) sit at the top of the map, right of the welcome card (§5.6), or in the top-left corner while the card is hidden. The map is drawn before the card, so they follow its rect from the previous frame, and the app repaints when it moves. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
 - **Locate me** (`ui/locate_button.rs`, ADR 0019): a square button (`layout.map_button_size`) in the bottom-right corner of the map, `spacing.map_button_margin` above the footer, and above the privacy notice or consent panel when they would overlap (phones). A click emits `Action::Locate`: the controller asks the browser for one position (`web::locate`, `getCurrentPosition`; the browser asks for permission the first time) and the answer comes back as `Event::Located`. A themed spinner replaces the icon while waiting. A position centers the map (`map_focus`, zoom at least `focus_zoom`) and is drawn under the campsites as a dot (`map.my_location_radius`, `map.colors.my_location`) inside its accuracy circle (`my_location_accuracy`). A failure (denied, unavailable, timeout, no API or no HTTPS) shows an error toast and removes the dot. **On page load**, `Action::CheckLocationPermission` asks the Permissions API, which never prompts, and locates automatically only if access is already `granted`. A failure of that automatic request is silent. The position is never sent to the server or saved.
 - When the viewport settles (debounce ~300 ms after pan/zoom stops), emit `Action::ViewportChanged(bbox)`, which triggers the bbox query (§4.4).
 - "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. Opening a fresh form shows an info toast: "Tip: click on the map to place your campsite." The panel shows the coordinates plus a "Use map center" button.
@@ -364,7 +368,7 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 - Right, logged out: **Log in**, **Sign up**. Logged in: **+ New campsite**, then the avatar/name menu (Profile, Moderation if admin, Log out).
 - **Narrow screens** (phones): the bar is `layout.top_bar_height_narrow` tall and has two rows. The first row has the logo, the count and a **☰ menu** with every account button (Log in / Sign up, or the name, + New campsite, Profile, Log out). The second row has the search field, which fills the row, and Filters.
 
-**Photo viewer** (`ui/photo_viewer.rs`): the one exception to "everything is a side panel". Clicking a campsite photo opens an egui `Modal` over the whole page (inset by `layout.photo_viewer_margin`, `photo_viewer_margin_narrow` on narrow screens, backdrop `colors.photo_viewer_backdrop`). It is a carousel: the current photo (`1200x1200f` thumb), fitted to the space, with ◀ ▶ on the sides (wrapping around), the title (truncated), "n / N" and × in the header, and a thumbnail row at the bottom with the current photo outlined. ← / → browse; Esc, × or a click on the backdrop close it. State is `CampsiteDetail::photo_open`, so it closes with the Campsite panel.
+**Photo viewer** (`ui/photo_viewer.rs`): an exception to "everything is a side panel" (the other is the welcome card, below). Clicking a campsite photo opens an egui `Modal` over the whole page (inset by `layout.photo_viewer_margin`, `photo_viewer_margin_narrow` on narrow screens, backdrop `colors.photo_viewer_backdrop`). It is a carousel: the current photo (`1200x1200f` thumb), fitted to the space, with ◀ ▶ on the sides (wrapping around), the title (truncated), "n / N" and × in the header, and a thumbnail row at the bottom with the current photo outlined. ← / → browse; Esc, × or a click on the backdrop close it. State is `CampsiteDetail::photo_open`, so it closes with the Campsite panel.
 
 **Side panels:** only one is active at a time. They share one frame: a header with the title plus a collapse button (◀/▶) and a close button (✕), and a scrollable body.
 
@@ -395,6 +399,14 @@ Behavior:
 **Map footer** (`ui/footer.rs`): a small strip at the bottom-right of the map (an egui `Area` constrained to the map rect, so it follows the docked panel's edge): the short titles of the documents marked `footer` in `documents.json` (Terms · Privacy · Legal notice), "Privacy choices" once consent is enabled (§5.12), then "© OpenStreetMap contributors". Documents open in the Document panel; the attribution opens openstreetmap.org/copyright in a new tab. Colors `map.colors.attribution_*`, padding `spacing.map_footer_padding`. Hidden while a panel covers the whole map (narrow screens).
 
 **Privacy notice** (`ui/notice.rs`): a card at the bottom-center of the map, above the footer, until the user clicks "Got it" (§5.11).
+
+**Welcome card** (`ui/welcome_card.rs`, ADR 0020): a floating card in the top-left corner of the map (an `Area` constrained to the map, `spacing.map_button_margin` from its edges), semi-transparent (`colors.welcome_bg`), at most `layout.welcome_width` wide (narrower when the zoom buttons wouldn't fit on its right) and `layout.welcome_max_height` tall, and it stops above the privacy notice or consent panel when they would overlap (phones). Its text scrolls.
+
+- **Tabs** (`widgets::tabs`): **Welcome** shows the `welcome` document (§5.11); links to other documents open them in the Document panel. **Updates** shows the latest releases, newest first: tag, title, a "Pre-release" badge, date, notes (Markdown) and "View on GitHub" (new tab), with loading, error + Retry and "No updates yet." states.
+- **Collapse** (◀) shrinks it to a "▶ Welcome" / "▶ Updates" button; the zoom buttons follow it.
+- **Nothing is saved**: it opens on Welcome on wide screens and starts collapsed on phones, on every visit (`WelcomeCard::collapsed` is `None` until the visitor collapses or expands it).
+- Hidden while a panel covers the whole map (narrow screens), like the footer.
+- **Release notes** come from the repository's GitHub Releases, at build time: `tools/changelog-gen` (a second Trunk `post_build` hook, settings in `assets/updates.json`) writes `releases.json` next to the app. Release builds call the GitHub API (optional `GITHUB_TOKEN`); dev builds use a recorded fixture; `WWC_CHANGELOG=fetch|fixture|off` overrides. A failed call warns and writes an empty list, never a failed build. Drafts are dropped, prereleases kept, the list is capped and long notes are cut. The app fetches `releases.json?v=<build id>` (`config::build_id`, the build time) the first time the Updates tab is shown (`Action::WelcomeTab` → `api::fetch_text` → `Event::Changelog`); a missing file reads as an empty list. Visitors never contact GitHub unless they click a link.
 
 ### 5.7 Theme (`frontend/assets/theme.json`)
 
@@ -435,7 +447,7 @@ Behavior:
 The UI is a canvas, so search engines and link-preview scrapers only see the static HTML (ADR 0012).
 
 - **Every SEO value lives in `seo.json`**: site URL, name, language and locale, title (≤ 60 chars), description (70–160), robots, favicon, Open Graph / Twitter card image, schema.org data, the text of the crawlable page, sitemap paths and robots.txt disallows. Never put SEO tags straight into `index.html`.
-- **`tools/seo-gen`** (host binary, workspace member) runs as a Trunk `post_build` hook, in `trunk serve` and `trunk build` alike. It validates `seo.json` (a bad value fails the build) and fills the markers of the staged `index.html`: `lang="seo:lang"`, `<!-- seo:head -->` (title, description, robots, canonical, `theme-color`, favicon, `og:*`, `twitter:*`, JSON-LD `WebSite` + `WebApplication`, page background/text colors) and `<!-- seo:body -->`. It also writes `robots.txt` and `sitemap.xml` and copies the images from `assets/seo/` to the site root. Colors come from `theme.json`.
+- **`tools/seo-gen`** (host binary, workspace member) runs as a Trunk `post_build` hook, in `trunk serve` and `trunk build` alike. It validates `seo.json` (a bad value fails the build) and fills the markers of the staged `index.html`: `lang="seo:lang"`, `<!-- seo:head -->` (title, description, robots, canonical, `theme-color`, favicon, `og:*`, `twitter:*`, JSON-LD `WebSite` + `WebApplication`, page background/text colors) and `<!-- seo:body -->`. It also writes `robots.txt` and `sitemap.xml` and copies the images from `assets/seo/` to the site root. Colors come from `theme.json`. A second `post_build` hook, `tools/changelog-gen`, writes `releases.json` (§5.6); hooks of the same stage run concurrently, so neither depends on the other.
 - **`<main id="about">`** is real content that describes the app: a heading, an intro and the feature list. Crawlers and no-JS browsers read it, and the canvas covers it once the app runs. Keep it truthful to what the app shows, because hidden or keyword-stuffed text is penalized as cloaking.
 - **Placeholder domain:** while `site_url` is `https://example.com`, the build prints a warning. Set the real domain before deploying. `seo-gen` also warns while `assets/documents/documents.json` has placeholder vars (§5.11).
 - **Images:** `og-image.png` (1200×630, PNG because scrapers don't read SVG) is rendered from `og-image.svg`; the command is in the SVG.
@@ -444,7 +456,7 @@ The UI is a canvas, so search engines and link-preview scrapers only see the sta
 
 ### 5.11 Documents and legal pages (`frontend/assets/documents/`)
 
-Long texts shown in the app are Markdown files in `frontend/assets/documents/`, listed in `documents.json`: today the Terms of Use, Privacy Policy, Legal Notice and Credits; tomorrow any guide, FAQ or changelog (ADR 0016).
+Long texts shown in the app are Markdown files in `frontend/assets/documents/`, listed in `documents.json`: today the Terms of Use, Privacy Policy, Legal Notice, Credits and the welcome text of the map's welcome card (`documents::WELCOME`, fetched at startup); tomorrow any guide or FAQ (ADR 0016). Release notes are not documents: they come from GitHub Releases (§5.6, ADR 0020).
 
 - **Manifest** (`documents.json`, compiled in, `src/documents/mod.rs`): `vars`, and `documents` with `id`, `title`, optional `short_title` (footer link text), `file`, `updated` (`YYYY-MM-DD`) and `footer` (linked from the map footer, in manifest order). `documents::TERMS` and `PRIVACY` are the ids the code links to.
 - **Files are fetched, not compiled in.** `index.html` copies the folder next to the app (Trunk `copy-dir`). Opening a document fetches `documents/<file>?v=<updated>` once per session (`api::fetch_text` → `Event::Document`, kept parsed in `AppState::documents`), so documents cost nothing in the wasm bundle and can be long. `?v=` changes with `updated`, so no cache serves an old version: **bump `updated` with every change readers can see** (it is also the "Last updated" date shown; editing an HTML comment doesn't count). An HTML response (a static host's SPA fallback for a missing file) counts as not found.
@@ -484,7 +496,7 @@ A consent panel for optional processing (analytics and any other non-essential s
 | **Security**    | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way).                                                                                                                              |
 | **Privacy**     | Never expose user emails publicly. Campsite coordinates are public by design, as the campsite form says. What is collected, public and stored is described in the Privacy Policy: keep it in sync (§5.11).                                                                                                                                    |
 | **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`.                                                                                                                           |
-| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default). Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
+| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default) and `WWC_BUILD_ID` (cache key of `releases.json`; `scripts/build-frontend.sh` sets the build time, `dev` when unset). Build only: `GITHUB_TOKEN` (optional, read-only) and `WWC_CHANGELOG` for `tools/changelog-gen`. Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
 | **Time**        | Store UTC (PocketBase does); format in local time in the UI.                                                                                                                                                                                                                                                                                  |
 
 ---
@@ -590,6 +602,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0017 — Photos are re-encoded in the browser before upload (2048 px, WebP or JPEG), which removes their metadata; lossless `strip_metadata` as a safety net and fallback; photos whose metadata can't be removed are refused.
 - 0018 — Password fields on phones: eframe's hidden text input is hidden with CSS and switched to `type="password"` while a password field is focused on touch screens, so phone keyboards send plain keystrokes.
 - 0019 — "Locate me" button at the bottom-right of the map: one browser position per click (permission asked on click only, automatic on load once already granted), kept in memory to center the map and draw a "you are here" dot, never sent or saved.
+- 0020 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
 
 ---
 
@@ -616,6 +629,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
 - Consent panel for analytics (§5.12), built and tested but disabled until analytics are added.
 - "Locate me" button: centers the map on the visitor and shows their position (§5.5, ADR 0019).
+- Welcome card at the top-left of the map: a welcome text and the latest release notes, synced from GitHub Releases at build time (§5.6, ADR 0020).
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 

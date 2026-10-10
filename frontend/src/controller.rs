@@ -7,10 +7,12 @@ use std::sync::mpsc::Sender;
 use crate::actions::{Action, ApiResult, ConsentChoice, Event, ToastKind};
 use crate::api::models::ReportTarget;
 use crate::api::{ApiClient, ApiError, CampsiteFilter, Done, clean_search, fetch_text};
+use crate::changelog;
 use crate::consent::{self, ConsentRecord};
 use crate::documents::{self, PRIVACY};
 use crate::state::{
     AppState, CampsiteDetail, CampsiteForm, ConsentPanel, Panel, Remote, ReportForm, Search, TENT_CAPACITY_MAX,
+    WelcomeTab,
 };
 
 pub struct Controller {
@@ -309,6 +311,14 @@ impl Controller {
                 state.consent = Some(ConsentRecord::new(config, &granted, now_ms()));
                 state.consent_panel = ConsentPanel::default();
             }
+            Action::WelcomeTab(tab) => {
+                state.welcome.tab = tab;
+                if tab == WelcomeTab::Updates && matches!(state.changelog, Remote::NotAsked) {
+                    self.load_changelog(state);
+                }
+            }
+            Action::CollapseWelcome(collapsed) => state.welcome.collapsed = Some(collapsed),
+            Action::LoadChangelog => self.load_changelog(state),
 
             Action::Toast(text, kind) => state.toast(kind, text),
         }
@@ -452,6 +462,11 @@ impl Controller {
         state.documents.insert(id.to_owned(), Remote::Loading);
         let cb = id.to_owned();
         fetch_text(&info.url(), self.done(move |result| Event::Document { id: cb, result }));
+    }
+
+    fn load_changelog(&self, state: &mut AppState) {
+        state.changelog = Remote::Loading;
+        fetch_text(&changelog::url(), self.done(Event::Changelog));
     }
 
     fn fetch_comments(&self, id: &str, page: u32) {
@@ -608,6 +623,23 @@ mod tests {
         c.handle(&mut state, Action::Register);
         assert!(!state.register.submitting);
         assert!(state.register.error.as_ref().and_then(|e| e.field("terms")).is_some());
+    }
+
+    #[test]
+    fn the_welcome_card_switches_tabs_and_collapses() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        assert!(!state.welcome.is_collapsed(false) && state.welcome.is_collapsed(true), "follows the screen");
+        c.handle(&mut state, Action::CollapseWelcome(true));
+        assert!(state.welcome.is_collapsed(false), "the visitor's choice wins");
+
+        // Already loaded: showing Updates again makes no request.
+        state.changelog = Remote::Loaded(vec![]);
+        c.handle(&mut state, Action::WelcomeTab(WelcomeTab::Updates));
+        assert_eq!(state.welcome.tab, WelcomeTab::Updates);
+        assert_eq!(state.changelog, Remote::Loaded(vec![]));
+        c.handle(&mut state, Action::WelcomeTab(WelcomeTab::Welcome));
+        assert_eq!(state.welcome.tab, WelcomeTab::Welcome);
     }
 
     #[test]

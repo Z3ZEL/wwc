@@ -50,6 +50,7 @@ WWC_API_URL=https://api.example.com scripts/build-frontend.sh   # → frontend/d
 - No local Rust/Trunk? Build in the dev image: `docker compose run --rm -e WWC_API_URL=https://api.example.com frontend /app/scripts/build-frontend.sh`
 - Upload `frontend/dist/` to any static host (S3 + CDN, Netlify, Cloudflare Pages, nginx…). Serve `.wasm` as `application/wasm`. The JS and wasm file names are hashed, so they can be cached forever; serve `index.html` with `Cache-Control: no-cache`.
 - Set `PB_ORIGINS` on the backend to the frontend's origin, or every API call is blocked by CORS.
+- **Release notes:** the release build lists the repository's latest GitHub Releases in the app's Updates tab (the welcome card at the top-left of the map). They're fetched from the GitHub API at build time and written into `releases.json`, so the notes you write on GitHub show up after the next deploy. Without a token GitHub allows 60 calls an hour per IP, which build hosts share: set an optional read-only `GITHUB_TOKEN` (a fine-grained token with no extra permissions is enough for a public repository) on the host if the build warns about the rate limit. A failed call only warns and leaves the tab empty. Settings (repository, how many releases, prereleases) are in [`frontend/assets/updates.json`](frontend/assets/updates.json); `WWC_CHANGELOG=fetch|fixture|off` overrides the source. The welcome text is [`frontend/assets/documents/welcome.md`](frontend/assets/documents/welcome.md). See ADR [0020](docs/adr/0020-welcome-and-updates-card.md).
 - **Legal pages:** before going live, replace every `TODO` value in [`frontend/assets/documents/documents.json`](frontend/assets/documents/documents.json) (your name, postal address, contact email, country, data protection authority, hosting providers). They fill in the Terms of Use, Privacy Policy and Legal Notice shown in the app, and the build warns while any is left. When you edit a document, bump its `updated` date. See ARCHITECTURE §5.11.
 
 **Building on a host or in CI** (Render, Netlify, Cloudflare Pages, GitHub Actions…): build environments don't ship Trunk or the pinned toolchain, so install them in the same step. On any Linux x86_64 machine with `curl`, `tar` and `cc`:
@@ -109,8 +110,8 @@ Check the S3 and SMTP settings from the dashboard (Settings → Files storage / 
 ```sh
 cargo fmt --check
 cargo clippy -p frontend --target wasm32-unknown-unknown -- -D warnings
-cargo clippy -p frontend --lib --tests -- -D warnings
-cargo test -p frontend --lib
+cargo clippy -p frontend -p changelog-gen --lib --tests -- -D warnings
+cargo test -p frontend -p changelog-gen --lib
 backend/tests/rules.sh        # API permission tests, against the running PocketBase
 ```
 
