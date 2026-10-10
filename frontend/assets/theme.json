@@ -59,7 +59,7 @@
     "spinner": "#2F7D4F",
     "spinner_track": "#E3EFE7",
 
-    "welcome_bg": "#FFFFFFE6"
+    "welcome_bg": "#FFFFFFCC"
   },
 
   "typography": {
@@ -121,7 +121,7 @@
     "notice_max_width": 480.0,
     "map_button_size": 40.0,
     "welcome_width": 360.0,
-    "welcome_max_height": 420.0
+    "welcome_max_height": 600.0
   },
 
   "map": {
