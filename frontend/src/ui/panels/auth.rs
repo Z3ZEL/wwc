@@ -17,6 +17,9 @@ pub fn login(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec
     field_error(ui, theme, f.error.as_ref(), "identity");
     let pw = text_field(ui, "Password", &mut f.password, true);
     field_error(ui, theme, f.error.as_ref(), "password");
+    if link_button(ui, theme, "Forgot password?").clicked() {
+        actions.push(Action::OpenPanel(Panel::ResetPassword));
+    }
     form_error(ui, theme, f.error.as_ref());
 
     ui.add_space(theme.spacing.item_spacing[1]);
@@ -32,6 +35,47 @@ pub fn login(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec
         muted(ui, theme, "No account yet?");
         if link_button(ui, theme, "Sign up").clicked() {
             actions.push(Action::OpenPanel(Panel::Register));
+        }
+    });
+}
+
+/// "Forgot password?": PocketBase emails a link to its own page for choosing a new password
+/// (like the email confirmation link, ARCHITECTURE §4.6). Then the user logs in here.
+pub fn reset_password(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
+    let f = &mut state.password_reset;
+    if let Some(email) = &f.sent_to {
+        // PocketBase answers the same for unknown emails, so this can't confirm the account.
+        muted(ui, theme, format!("If an account uses {email}, we sent it a link to choose a new password."));
+        muted(ui, theme, "Open it, set your new password, then come back to log in.");
+        ui.add_space(theme.spacing.item_spacing[1]);
+        ui.horizontal_wrapped(|ui| {
+            muted(ui, theme, "No email after a few minutes? Check your spam folder or");
+            let label = if f.sending { "Sending…" } else { "send it again" };
+            if ui.add_enabled_ui(!f.sending, |ui| link_button(ui, theme, label)).inner.clicked() {
+                actions.push(Action::RequestPasswordReset);
+            }
+        });
+        form_error(ui, theme, f.error.as_ref());
+    } else {
+        muted(ui, theme, "Enter the email of your account. We'll send you a link to choose a new password.");
+        let email = text_field(ui, "Email", &mut f.email, false);
+        field_error(ui, theme, f.error.as_ref(), "email");
+        form_error(ui, theme, f.error.as_ref());
+
+        ui.add_space(theme.spacing.item_spacing[1]);
+        let enabled = !f.sending;
+        if primary_button(ui, theme, if f.sending { "Sending…" } else { "Send link" }, enabled).clicked()
+            || (enabled && submitted(ui, &email))
+        {
+            actions.push(Action::RequestPasswordReset);
+        }
+    }
+
+    ui.add_space(theme.spacing.section_gap);
+    ui.horizontal(|ui| {
+        muted(ui, theme, "Remembered it?");
+        if link_button(ui, theme, "Log in").clicked() {
+            actions.push(Action::OpenPanel(Panel::Login));
         }
     });
 }
