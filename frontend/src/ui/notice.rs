@@ -14,11 +14,18 @@ use crate::ui::widgets::{link_button, primary_button};
 const TEXT: &str = "No ads, no analytics, no tracking cookies. Your browser only keeps your login session \
                     and this notice's state. Map images are loaded from OpenStreetMap's servers.";
 
-/// `area`: the part of the map the notice may cover (above the footer).
-pub fn show(ctx: &egui::Context, area: Rect, state: &AppState, theme: &Theme, actions: &mut Vec<Action>) {
-    let Some(policy) = documents::manifest().get(PRIVACY) else { return };
+/// `area`: the part of the map the notice may cover (above the footer). Returns the notice's
+/// rect while it is shown.
+pub fn show(
+    ctx: &egui::Context,
+    area: Rect,
+    state: &AppState,
+    theme: &Theme,
+    actions: &mut Vec<Action>,
+) -> Option<Rect> {
+    let policy = documents::manifest().get(PRIVACY)?;
     if state.notice_seen.as_deref() == Some(policy.updated.as_str()) || area.width() < 1.0 {
-        return;
+        return None;
     }
     let c = &theme.colors;
     let gap = theme.spacing.item_spacing[1];
@@ -29,7 +36,7 @@ pub fn show(ctx: &egui::Context, area: Rect, state: &AppState, theme: &Theme, ac
         None => "Your privacy".to_owned(),
     };
 
-    Area::new(Id::new("privacy_notice"))
+    let shown = Area::new(Id::new("privacy_notice"))
         .order(Order::Middle)
         .pivot(Align2::CENTER_BOTTOM)
         .fixed_pos(area.center_bottom() - Vec2::new(0.0, gap))
@@ -54,4 +61,5 @@ pub fn show(ctx: &egui::Context, area: Rect, state: &AppState, theme: &Theme, ac
                     });
                 });
         });
+    Some(shown.response.rect)
 }

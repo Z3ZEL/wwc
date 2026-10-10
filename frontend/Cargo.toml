@@ -51,5 +51,17 @@ web-sys = { version = "0.3", features = [
     "OffscreenCanvas",
     "OffscreenCanvasRenderingContext2d",
     "ImageEncodeOptions",
+    # "Locate me" button (src/web/geolocation.rs)
+    "Navigator",
+    "Geolocation",
+    "Position",
+    "Coordinates",
+    "PositionError",
+    "PositionOptions",
+    "Permissions",
+    "PermissionDescriptor",
+    "PermissionName",
+    "PermissionStatus",
+    "PermissionState",
 ] }
 console_error_panic_hook = "0.1"

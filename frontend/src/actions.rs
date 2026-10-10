@@ -6,7 +6,7 @@ use crate::api::models::{
     AuthResponse, Campsite, CampsiteMarker, CampsiteStats, Comment, ListResponse, Rating, Report, Tag, User,
 };
 use crate::api::{ApiError, BBox};
-use crate::state::{Panel, PhotoRef, PickedPhoto};
+use crate::state::{LocateError, MyLocation, Panel, PhotoRef, PickedPhoto};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -33,6 +33,10 @@ pub enum Action {
         lat: f64,
         lng: f64,
     },
+    /// "Locate me" button: ask the browser for the visitor's position and center the map on it.
+    Locate,
+    /// Page load: locate at once if the visitor already allowed it, without asking.
+    CheckLocationPermission,
 
     /// Run the query typed in the top bar search field.
     Search,
@@ -148,6 +152,10 @@ pub enum Event {
 
     /// Files chosen in the photo picker (not a network result, but it arrives the same way).
     PhotosPicked(Vec<PickedPhoto>),
+    /// The browser's answer to `Action::Locate` (not a network result either).
+    Located(Result<MyLocation, LocateError>),
+    /// Whether location access was already granted (`Action::CheckLocationPermission`).
+    LocationPermission(bool),
     CampsiteSaved {
         created: bool,
         result: ApiResult<Campsite>,

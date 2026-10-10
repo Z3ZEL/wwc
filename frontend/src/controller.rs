@@ -88,6 +88,14 @@ impl Controller {
                 state.map_focus = Some((lat, lng));
                 self.request_panel(state, Some(Panel::Campsite(id)));
             }
+            Action::Locate => {
+                // Ask again even with a position on screen: the visitor may have moved.
+                if !state.locate.pending {
+                    state.locate.pending = true;
+                    self.locate();
+                }
+            }
+            Action::CheckLocationPermission => self.check_location_permission(),
 
             Action::Search => {
                 let query = clean_search(&state.search.query);
@@ -492,6 +500,32 @@ impl Controller {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = max;
+    }
+
+    /// The browser's answer comes back as `Event::Located`, like an API result.
+    fn locate(&self) {
+        // Geolocation is a browser API; host builds (unit tests) have none.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+            crate::web::locate(move |result| {
+                let _ = tx.send(Event::Located(result));
+                ctx.request_repaint();
+            });
+        }
+    }
+
+    /// Never asks the visitor: the answer comes back as `Event::LocationPermission`, and the
+    /// reducer locates only if access was already granted.
+    fn check_location_permission(&self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
+            crate::web::location_allowed(move |granted| {
+                let _ = tx.send(Event::LocationPermission(granted));
+                ctx.request_repaint();
+            });
+        }
     }
 }
 

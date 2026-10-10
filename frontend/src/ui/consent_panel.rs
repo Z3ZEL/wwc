@@ -17,10 +17,17 @@ const TEXT: &str = "With your consent, we would like to measure how the site is 
                     at any time with \u{201c}Privacy choices\u{201d} at the bottom of the map.";
 
 /// `area`: the part of the map the panel may cover (above the footer). Gets `&mut AppState`
-/// only to edit the panel's own buffers (customize view, ticked purposes).
-pub fn show(ctx: &egui::Context, area: Rect, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
+/// only to edit the panel's own buffers (customize view, ticked purposes). Returns the panel's
+/// rect while it is shown.
+pub fn show(
+    ctx: &egui::Context,
+    area: Rect,
+    state: &mut AppState,
+    theme: &Theme,
+    actions: &mut Vec<Action>,
+) -> Option<Rect> {
     if !state.consent_panel_open() || area.width() < 1.0 {
-        return;
+        return None;
     }
     let config = consent::config();
     let c = &theme.colors;
@@ -29,7 +36,7 @@ pub fn show(ctx: &egui::Context, area: Rect, state: &mut AppState, theme: &Theme
     let width = area.width().min(theme.layout.notice_max_width) - 2.0 * gap - margin.sum().x;
     let panel = &mut state.consent_panel;
 
-    Area::new(Id::new("consent_panel"))
+    let shown = Area::new(Id::new("consent_panel"))
         .order(Order::Middle)
         .pivot(Align2::CENTER_BOTTOM)
         .fixed_pos(area.center_bottom() - Vec2::new(0.0, gap))
@@ -92,4 +99,5 @@ pub fn show(ctx: &egui::Context, area: Rect, state: &mut AppState, theme: &Theme
                     });
                 });
         });
+    Some(shown.response.rect)
 }

@@ -99,13 +99,14 @@ wwc/
 │       ├── documents/         # documents.json manifest + vars, Markdown → blocks parser (host-tested)
 │       ├── consent.rs         # consent.json + consent records: validity, expiry, `allows` (host-tested)
 │       ├── media/             # photo upload settings + lossless metadata stripping (host-tested)
-│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title, password keyboard), wasm only
+│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title, password keyboard, geolocation), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
 │           ├── footer.rs      # map footer: legal links + OSM attribution
 │           ├── notice.rs      # privacy notice at the bottom of the map
 │           ├── consent_panel.rs # consent panel (replaces the notice once consent is enabled)
+│           ├── locate_button.rs # "Locate me" button at the bottom-right of the map
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters, document
 │           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider, markdown
 ├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
@@ -296,7 +297,7 @@ Rules:
 - **UI functions never call the API directly.** They read `AppState` and push `Action`s. The one exception: egui text inputs need `&mut String`, so panels get `&mut AppState` and may edit **form input buffers** (and small view toggles like "confirm delete"). Anything else goes through an `Action`.
 - **All API results come back as `Event`s** through a single `std::sync::mpsc` receiver drained at the start of every frame. `ehttp` callbacks send the event, then call `ctx.request_repaint()` (see `Controller::done`).
 - **Exception — images:** `egui::Image::new(url)` fetches campsite photos itself, through the `egui_extras` loaders installed in `app.rs`, the same way walkers fetches tiles. It's read-only and cached, and it never touches `AppState`. UI code only builds the URL with `api::photo_url` (ADR 0010).
-- **Browser APIs** that egui lacks (the file picker) live in `web/` and are called by the controller only. Their results come back as `Event`s, like API results.
+- **Browser APIs** that egui lacks (the file picker, geolocation) live in `web/` and are called by the controller only. Their results come back as `Event`s, like API results.
 - **State mutation from events is pure**: `fn apply(state: &mut AppState, event: Event) -> Vec<Action>`. The returned follow-up actions (e.g. "log in" after signup, "refresh markers" after a save) are handled by the controller in the same frame. It is unit-tested on the host.
 - Remote data is modeled explicitly, e.g.:
   ```rust
@@ -307,7 +308,7 @@ Rules:
 
 ### 5.3 State shape (starting point)
 
-See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `toasts`.
+See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `locate` (the "Locate me" request and the last position found, memory only), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `toasts`.
 The walkers tile cache and map memory are not in `AppState`; they live in `map::MapView`, owned by the app.
 
 - **Routing (not implemented yet — panel state is in memory only):** there is one page (the map). The "route" is the active side panel. Sync `panel` with the URL hash so links are shareable and back/forward work: `#/` (none), `#/login`, `#/register`, `#/profile`, `#/new`, `#/campsite/<id>`, `#/campsite/<id>/edit`, `#/moderation`. Read the hash on startup. Unknown hash → `#/`. An auth-only panel opened while logged out → login panel, then back to the requested panel after login.
@@ -331,6 +332,7 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 - **Clustering** (`map/cluster.rs`): below `map.cluster_max_zoom`, markers closer than `map.cluster_distance` points on screen are drawn as one circle with a count (radius `cluster_radius`…`cluster_radius_max`). Clicking a cluster centers on it and zooms in by `cluster_zoom_step`. The selected campsite is always drawn alone. The grouping only uses relative screen positions, so panning doesn't change it.
 - `AppState.map_focus`: set by `Action::FocusCampsite` (a search result click). The map takes it on its next frame, centers there and zooms in to at least `map.focus_zoom`.
 - Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons sit in the top-left corner. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
+- **Locate me** (`ui/locate_button.rs`, ADR 0019): a square button (`layout.map_button_size`) in the bottom-right corner of the map, `spacing.map_button_margin` above the footer, and above the privacy notice or consent panel when they would overlap (phones). A click emits `Action::Locate`: the controller asks the browser for one position (`web::locate`, `getCurrentPosition`; the browser asks for permission the first time) and the answer comes back as `Event::Located`. A themed spinner replaces the icon while waiting. A position centers the map (`map_focus`, zoom at least `focus_zoom`) and is drawn under the campsites as a dot (`map.my_location_radius`, `map.colors.my_location`) inside its accuracy circle (`my_location_accuracy`). A failure (denied, unavailable, timeout, no API or no HTTPS) shows an error toast and removes the dot. **On page load**, `Action::CheckLocationPermission` asks the Permissions API, which never prompts, and locates automatically only if access is already `granted`. A failure of that automatic request is silent. The position is never sent to the server or saved.
 - When the viewport settles (debounce ~300 ms after pan/zoom stops), emit `Action::ViewportChanged(bbox)`, which triggers the bbox query (§4.4).
 - "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. Opening a fresh form shows an info toast: "Tip: click on the map to place your campsite." The panel shows the coordinates plus a "Use map center" button.
 - Campsite form fields: title, description, tags (multi-select chips from the loaded tag list), tent capacity (a stepper or slider 1–10 that shows `10+` at max), photos (thumbnails with × to remove, and "Add photos (n/3)", which opens the browser file dialog; wrong type, size or count → error toast). Picked photos are re-encoded by the browser before the form sees them: fitted in 2048 px, WebP (JPEG where the browser can't encode WebP), with no metadata (GPS position, date, camera), and `media::strip_metadata` as a safety net; a photo whose metadata can't be removed is refused (ADR 0017). The form says so, shows the size before → after, and previews each photo from a small JPEG made from the same decode. They are uploaded on save.
@@ -587,6 +589,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0016 — Legal pages as in-app Markdown documents (`assets/documents/`, fetched on demand, `{{vars}}` in a compiled-in manifest), map footer, sign-up consent checkbox, informative privacy notice instead of a consent banner; a consent panel ready for analytics, disabled until then.
 - 0017 — Photos are re-encoded in the browser before upload (2048 px, WebP or JPEG), which removes their metadata; lossless `strip_metadata` as a safety net and fallback; photos whose metadata can't be removed are refused.
 - 0018 — Password fields on phones: eframe's hidden text input is hidden with CSS and switched to `type="password"` while a password field is focused on touch screens, so phone keyboards send plain keystrokes.
+- 0019 — "Locate me" button at the bottom-right of the map: one browser position per click (permission asked on click only, automatic on load once already granted), kept in memory to center the map and draw a "you are here" dot, never sent or saved.
 
 ---
 
@@ -612,6 +615,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Backend image (amd64 + arm64) published to GHCR on each GitHub Release (ADR 0013); full releases also deploy the frontend on Render (ADR 0015).
 - Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
 - Consent panel for analytics (§5.12), built and tested but disabled until analytics are added.
+- "Locate me" button: centers the map on the visitor and shows their position (§5.5, ADR 0019).
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 
