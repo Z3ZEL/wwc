@@ -202,7 +202,17 @@ impl ApiClient {
 
     /// Sends the confirmation email. PocketBase answers 204 whether or not the email exists.
     pub fn request_verification(&self, email: &str, on_done: Done<()>) {
-        let url = self.url("/api/collections/users/request-verification", &[]);
+        self.request_email("/api/collections/users/request-verification", email, on_done);
+    }
+
+    /// Sends a link to PocketBase's own "new password" page. Like `request_verification`, the
+    /// answer is 204 whether or not an account uses the email (no account enumeration).
+    pub fn request_password_reset(&self, email: &str, on_done: Done<()>) {
+        self.request_email("/api/collections/users/request-password-reset", email, on_done);
+    }
+
+    fn request_email(&self, path: &str, email: &str, on_done: Done<()>) {
+        let url = self.url(path, &[]);
         let body = json!({ "email": email }).to_string().into_bytes();
         let mut req = ehttp::Request::post(url, body);
         req.headers.insert("Content-Type", "application/json");

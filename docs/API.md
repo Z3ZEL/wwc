@@ -118,7 +118,7 @@ One row per visible campsite, with the same `id` as the campsite: `avg_score` (0
 |---|---|
 | `own_campsite.pb.js` | Rejects a rating or comment on your own campsite (backup for the create rules). |
 | `reports.pb.js` | On report create: exactly one target, no `wrong_location` on a comment, not your own content, no duplicate ("You already reported this."), and `status = open`. |
-| `settings.pb.js` | On boot, applies instance settings: `backend/pb_settings.json` (rate limits: auth 2 req/3 s, create 20/5 s, API 300/10 s per IP; batch API off; off in dev), optional `PB_SETTINGS_FILE`, then env vars for S3, backups, SMTP, app URL, trusted proxy headers (`.env.example`, ADR 0012). |
+| `settings.pb.js` | On boot, applies instance settings: `backend/pb_settings.json` (rate limits: auth 2 req/3 s, password reset emails 3/60 s, create 20/5 s, API 300/10 s per IP; batch API off; off in dev), optional `PB_SETTINGS_FILE`, then env vars for S3, backups, SMTP, app URL, trusted proxy headers (`.env.example`, ADR 0012). |
 | `moderation.pb.js` | When an admin who isn't the author updates a campsite or comment, only `hidden` may change (this also blocks photo uploads and removals). |
 
 ## Requests the frontend makes
@@ -140,6 +140,7 @@ POST   /api/collections/users/auth-with-password   {identity, password}
 POST   /api/collections/users/auth-refresh
 POST   /api/collections/users/records               {name, email, password, passwordConfirm}
 POST   /api/collections/users/request-verification  {email}          (after register, and "Resend email")
+POST   /api/collections/users/request-password-reset  {email}        (Reset password panel; 204 even for unknown emails)
 PATCH  /api/collections/users/records/:id           {name} | {oldPassword, password, passwordConfirm}
 POST   /api/collections/campsites/records?expand=author,tags   {title, description, lat, lng, tags, tent_capacity, author}
 PATCH  /api/collections/campsites/records/:id?expand=author,tags   (same, without author; + "photos-": [filenames])
