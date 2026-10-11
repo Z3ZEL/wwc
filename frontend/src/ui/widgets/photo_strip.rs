@@ -11,10 +11,12 @@ pub struct Thumb<'a> {
     pub label: &'a str,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct PhotoStripResponse {
     pub clicked: Option<usize>,
     pub removed: Option<usize>,
+    /// Where the `selected` thumbnail was drawn (to scroll it into view).
+    pub selected_rect: Option<Rect>,
 }
 
 /// Options for `photo_strip`.
@@ -25,13 +27,15 @@ pub struct StripStyle {
     pub removable: bool,
     /// Index drawn with the `photo_selected` outline.
     pub selected: Option<usize>,
+    /// Wrap onto several rows; otherwise one row (put it in a horizontal `ScrollArea`).
+    pub wrap: bool,
 }
 
 pub fn photo_strip(ui: &mut Ui, theme: &Theme, thumbs: Vec<Thumb<'_>>, style: StripStyle) -> PhotoStripResponse {
-    let StripStyle { height, removable, selected } = style;
+    let StripStyle { height, removable, selected, wrap } = style;
     let size = vec2(height * 4.0 / 3.0, height);
     let mut out = PhotoStripResponse::default();
-    ui.horizontal_wrapped(|ui| {
+    let row = |ui: &mut Ui| {
         ui.spacing_mut().item_spacing = Vec2::splat(theme.spacing.photo_gap);
         for (i, thumb) in thumbs.into_iter().enumerate() {
             let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
@@ -46,6 +50,7 @@ pub fn photo_strip(ui: &mut Ui, theme: &Theme, thumbs: Vec<Thumb<'_>>, style: St
                 }
             }
             if selected == Some(i) {
+                out.selected_rect = Some(rect);
                 let stroke = egui::Stroke::new(theme.shape.focus_border_width, theme.colors.photo_selected);
                 ui.painter().rect_stroke(rect, theme.radius(), stroke, egui::StrokeKind::Outside);
             }
@@ -67,6 +72,11 @@ pub fn photo_strip(ui: &mut Ui, theme: &Theme, thumbs: Vec<Thumb<'_>>, style: St
                 }
             }
         }
-    });
+    };
+    if wrap {
+        ui.horizontal_wrapped(row);
+    } else {
+        ui.horizontal(row);
+    }
     out
 }

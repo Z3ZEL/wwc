@@ -149,7 +149,7 @@ fn photos(ui: &mut Ui, theme: &Theme, c: &Campsite, d: &mut CampsiteDetail, api_
             label: file,
         })
         .collect();
-    let style = StripStyle { height: theme.layout.photo_thumb_height, removable: false, selected: None };
+    let style = StripStyle { height: theme.layout.photo_thumb_height, removable: false, selected: None, wrap: true };
     if let Some(i) = photo_strip(ui, theme, thumbs, style).clicked {
         d.photo_open = Some(i);
     }
