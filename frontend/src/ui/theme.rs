@@ -165,6 +165,14 @@ pub struct Layout {
     pub photo_viewer_margin_narrow: f32,
     /// Height of the carousel thumbnails at the bottom of the viewer.
     pub photo_viewer_thumb_height: f32,
+    /// Largest zoom of a photo in the viewer (1 = fitted to the screen).
+    pub photo_viewer_max_zoom: f32,
+    /// Zoom reached by a double click / double tap on a fitted photo.
+    pub photo_viewer_double_tap_zoom: f32,
+    /// Mouse wheel zoom: the zoom is multiplied by `exp(points scrolled × speed)`.
+    pub photo_viewer_wheel_zoom_speed: f32,
+    /// Horizontal swipe distance on an unzoomed photo that moves to the next / previous one.
+    pub photo_viewer_swipe_threshold: f32,
     /// Width of the top bar search field on wide screens; it shrinks if the bar is short
     /// of space, and fills its row on narrow screens.
     pub search_width: f32,

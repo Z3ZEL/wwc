@@ -143,7 +143,12 @@ fn photos(
     });
     let thumbs: Vec<Thumb<'_>> = existing.chain(new).collect();
     if !thumbs.is_empty() {
-        let style = StripStyle { height: theme.layout.photo_thumb_height, removable: !f.submitting, selected: None };
+        let style = StripStyle {
+            height: theme.layout.photo_thumb_height,
+            removable: !f.submitting,
+            selected: None,
+            wrap: true,
+        };
         let removed = photo_strip(ui, theme, thumbs, style).removed;
         let photo = removed.and_then(|i| match f.existing_photos.get(i) {
             Some(file) => Some(PhotoRef::Existing(file.clone())),
