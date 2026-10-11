@@ -10,7 +10,8 @@ use crate::api::{ApiClient, ApiError, CampsiteFilter, Done, clean_search, fetch_
 use crate::consent::{self, ConsentRecord};
 use crate::documents::{self, PRIVACY};
 use crate::state::{
-    AppState, CampsiteDetail, CampsiteForm, ConsentPanel, Panel, Remote, ReportForm, Search, TENT_CAPACITY_MAX,
+    AppState, CampsiteDetail, CampsiteForm, ConsentPanel, Panel, PasswordResetForm, Remote, ReportForm, Search,
+    TENT_CAPACITY_MAX,
 };
 
 pub struct Controller {
@@ -163,6 +164,22 @@ impl Controller {
             }
             Action::RequestVerification { email } => {
                 self.api.request_verification(&email, self.done(Event::VerificationRequested));
+            }
+            Action::RequestPasswordReset => {
+                let f = &mut state.password_reset;
+                let errors = f.validate();
+                if !errors.is_empty() {
+                    f.error = Some(ApiError::validation(errors));
+                    return;
+                }
+                f.sending = true;
+                f.error = None;
+                let email = f.email.trim().to_owned();
+                let done = {
+                    let email = email.clone();
+                    self.done(move |result| Event::PasswordResetRequested { email, result })
+                };
+                self.api.request_password_reset(&email, done);
             }
             Action::Logout => {
                 state.session = None;
@@ -356,8 +373,9 @@ impl Controller {
             other => other,
         };
 
-        // Reading a document (e.g. the Terms from the sign-up form) doesn't abandon the login detour.
-        if !matches!(target, Some(Panel::Login | Panel::Register | Panel::Document(_))) {
+        // Reading a document (e.g. the Terms from the sign-up form) or resetting the password
+        // doesn't abandon the login detour.
+        if !matches!(target, Some(Panel::Login | Panel::Register | Panel::ResetPassword | Panel::Document(_))) {
             state.after_login = None; // the login detour was abandoned
         }
         // A document offers a way back to where it was opened from, even after following
@@ -394,6 +412,14 @@ impl Controller {
                 }
             }
             Some(Panel::Register) => state.register.error = None,
+            Some(Panel::ResetPassword) => {
+                // Start from the email typed in the login form, if any.
+                let email = match state.login.email.trim() {
+                    "" => std::mem::take(&mut state.password_reset.email),
+                    typed => typed.to_owned(),
+                };
+                state.password_reset = PasswordResetForm { email, ..Default::default() };
+            }
             Some(Panel::Report(t)) => {
                 // Go back to the campsite afterwards: the reported one, or the one holding the comment.
                 let campsite_id = match t {
@@ -589,6 +615,29 @@ mod tests {
         c.handle(&mut state, Action::OpenPanel(Panel::Document(TERMS.into())));
         c.handle(&mut state, Action::OpenPanel(Panel::Login));
         assert_eq!(state.after_login, Some(Panel::NewCampsite));
+    }
+
+    #[test]
+    fn forgot_password_starts_from_the_login_email_and_keeps_the_detour() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        c.handle(&mut state, Action::OpenPanel(Panel::NewCampsite));
+        state.login.email = " a@example.com ".into();
+
+        c.handle(&mut state, Action::OpenPanel(Panel::ResetPassword));
+        assert_eq!(state.password_reset.email, "a@example.com");
+        c.handle(&mut state, Action::OpenPanel(Panel::Login));
+        assert_eq!(state.after_login, Some(Panel::NewCampsite));
+    }
+
+    #[test]
+    fn password_reset_needs_an_email() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        c.handle(&mut state, Action::OpenPanel(Panel::ResetPassword));
+        c.handle(&mut state, Action::RequestPasswordReset);
+        assert!(!state.password_reset.sending);
+        assert!(state.password_reset.error.as_ref().and_then(|e| e.field("email")).is_some());
     }
 
     #[test]

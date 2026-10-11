@@ -123,6 +123,25 @@ pub fn apply(state: &mut AppState, event: Event) -> Vec<Action> {
             Err(e) => state.toast(ToastKind::Error, format!("Couldn't send the confirmation email: {e}")),
         },
 
+        Event::PasswordResetRequested { email, result } => {
+            let f = &mut state.password_reset;
+            f.sending = false;
+            let open = state.panel == Some(Panel::ResetPassword);
+            match result {
+                Ok(()) => {
+                    f.error = None;
+                    f.sent_to = Some(email.clone());
+                    // "Back to log in" then has the email filled in.
+                    state.login.email = email;
+                    if !open {
+                        state.toast(ToastKind::Info, "We sent you a link to choose a new password.");
+                    }
+                }
+                Err(e) if open => f.error = Some(e),
+                Err(e) => state.toast(ToastKind::Error, format!("Couldn't send the password reset email: {e}")),
+            }
+        }
+
         Event::ProfileNameSaved(result) => {
             state.profile.saving_name = false;
             match result {
@@ -454,6 +473,35 @@ mod tests {
         let kinds: Vec<_> = s.toasts.iter().map(|t| t.kind).collect();
         assert_eq!(kinds, vec![ToastKind::Info, ToastKind::Error]);
         assert!(s.session.is_some(), "a failed email request doesn't log out");
+    }
+
+    #[test]
+    fn sent_password_reset_shows_where_it_went_and_fills_the_login_email() {
+        let mut s = AppState { panel: Some(Panel::ResetPassword), ..Default::default() };
+        s.password_reset.sending = true;
+        let follow = apply(&mut s, Event::PasswordResetRequested { email: "a@example.com".into(), result: Ok(()) });
+        assert!(follow.is_empty());
+        assert!(!s.password_reset.sending);
+        assert_eq!(s.password_reset.sent_to.as_deref(), Some("a@example.com"));
+        assert_eq!(s.login.email, "a@example.com");
+        assert!(s.toasts.is_empty(), "the panel says it");
+    }
+
+    #[test]
+    fn password_reset_error_stays_on_the_form_or_becomes_a_toast() {
+        let mut s = AppState { panel: Some(Panel::ResetPassword), ..Default::default() };
+        let body = br#"{"status":429,"message":"Too Many Requests.","data":{}}"#;
+        let error = || ApiError::from_response(429, body);
+        apply(&mut s, Event::PasswordResetRequested { email: "a@example.com".into(), result: Err(error()) });
+        assert_eq!(s.password_reset.error.as_ref().map(|e| e.status), Some(429));
+        assert_eq!(s.password_reset.sent_to, None);
+
+        // The panel was closed while the request was in flight.
+        s.panel = None;
+        s.password_reset.error = None;
+        apply(&mut s, Event::PasswordResetRequested { email: "a@example.com".into(), result: Err(error()) });
+        assert_eq!(s.password_reset.error, None);
+        assert_eq!(s.toasts.iter().map(|t| t.kind).collect::<Vec<_>>(), vec![ToastKind::Error]);
     }
 
     #[test]

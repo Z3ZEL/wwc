@@ -81,6 +81,27 @@ pub struct LoginForm {
     pub submitting: bool,
 }
 
+/// "Forgot password?": asks PocketBase to email a reset link (ARCHITECTURE §4.6).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PasswordResetForm {
+    pub email: String,
+    pub error: Option<ApiError>,
+    pub sending: bool,
+    /// The address the last link was sent to. PocketBase answers the same whether or not an
+    /// account uses it, so the panel can't say more than "if an account uses it".
+    pub sent_to: Option<String>,
+}
+
+impl PasswordResetForm {
+    pub fn validate(&self) -> BTreeMap<String, String> {
+        let mut errors = BTreeMap::new();
+        if self.email.trim().is_empty() {
+            errors.insert("email".into(), "Enter the email of your account.".into());
+        }
+        errors
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RegisterForm {
     pub name: String,
@@ -460,6 +481,14 @@ mod tests {
         assert!(errors.contains_key("passwordConfirm") && errors.contains_key("terms"));
         form.confirm = "a".into();
         form.accepted_terms = true;
+        assert!(form.validate().is_empty());
+    }
+
+    #[test]
+    fn password_reset_needs_an_email() {
+        let mut form = PasswordResetForm { email: "  ".into(), ..Default::default() };
+        assert!(form.validate().contains_key("email"));
+        form.email = "a@example.com".into();
         assert!(form.validate().is_empty());
     }
 

@@ -39,6 +39,7 @@ pub fn show(ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<
         match panel {
             Panel::Login => auth::login(ui, state, theme, actions),
             Panel::Register => auth::register(ui, state, theme, actions),
+            Panel::ResetPassword => auth::reset_password(ui, state, theme, actions),
             Panel::Profile => profile::show(ui, state, theme, actions),
             Panel::NewCampsite | Panel::EditCampsite(_) => campsite_form::show(ui, state, theme, actions),
             Panel::Campsite(_) => campsite_view::show(ui, state, theme, actions),

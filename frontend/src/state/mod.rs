@@ -7,8 +7,8 @@ mod reduce;
 
 pub use forms::{
     CampsiteForm, ConsentPanel, LoginForm, MAX_PHOTO_BYTES, MAX_PHOTOS, MAX_SOURCE_BYTES, NewPhoto, PHOTO_MIME_TYPES,
-    PhotoRef, PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm, TENT_CAPACITY_MAX, photo_problem,
-    source_problem, tent_capacity_label,
+    PasswordResetForm, PhotoRef, PickedPhoto, ProfileForm, REPORT_DETAILS_MAX, RegisterForm, ReportForm,
+    TENT_CAPACITY_MAX, photo_problem, source_problem, tent_capacity_label,
 };
 pub use location::{Locate, LocateError, MyLocation};
 pub use reduce::apply;
@@ -26,6 +26,8 @@ use crate::documents::Block;
 pub enum Panel {
     Login,
     Register,
+    /// "Forgot password?" from the Login panel: sends a reset link by email.
+    ResetPassword,
     Profile,
     NewCampsite,
     Campsite(String),
@@ -53,6 +55,7 @@ impl Panel {
         match self {
             Panel::Login => "Log in",
             Panel::Register => "Create an account",
+            Panel::ResetPassword => "Reset password",
             Panel::Profile => "Profile",
             Panel::NewCampsite => "New campsite",
             Panel::Campsite(_) => "Campsite",
@@ -235,6 +238,7 @@ pub struct AppState {
 
     pub login: LoginForm,
     pub register: RegisterForm,
+    pub password_reset: PasswordResetForm,
     pub profile: ProfileForm,
     pub campsite_form: CampsiteForm,
     pub report: ReportForm,

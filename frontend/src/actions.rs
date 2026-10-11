@@ -56,6 +56,8 @@ pub enum Action {
     RequestVerification {
         email: String,
     },
+    /// Send the Reset password panel's form: email a link to choose a new password.
+    RequestPasswordReset,
     Logout,
     SaveProfileName,
     ChangePassword,
@@ -143,6 +145,10 @@ pub enum Event {
         result: ApiResult<User>,
     },
     VerificationRequested(ApiResult<()>),
+    PasswordResetRequested {
+        email: String,
+        result: ApiResult<()>,
+    },
     ProfileNameSaved(ApiResult<User>),
     PasswordChanged {
         email: String,

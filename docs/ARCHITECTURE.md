@@ -264,7 +264,8 @@ Shorthands used below (write them out in full in the real rules):
 
 - Email + password via PocketBase auth collection. OAuth2 providers (Google, GitHub…) can be enabled later with no frontend architecture change.
 - Email verification is required before posting: `VERIFIED` in the create rules (§4.3). Registering sends the confirmation email (`request-verification`); the link opens PocketBase's own confirmation page (`PB_APP_URL/_/#/auth/confirm-verification/…`). The UI replaces create forms with "Confirm your email" + "Resend email" / "I've confirmed it" (auth-refresh) while `verified` is false. SMTP comes from env (`pb_hooks/settings.pb.js`); in dev, mailpit catches the mail (§7).
-- Built-in rate limiting is on for auth and create endpoints (`backend/pb_settings.json`; off in dev).
+- **Forgot password** (ADR 0020): the Login panel links to a Reset password panel that calls `request-password-reset`. PocketBase emails a link to its own page for choosing a new password (`PB_APP_URL/_/#/auth/confirm-password-reset/…`), which also signs the account out everywhere. Then the user logs in. PocketBase answers 204 whether or not an account uses the email, so the panel only says "if an account uses <email>, we sent it a link".
+- Built-in rate limiting is on for auth and create endpoints, and for password reset emails (`backend/pb_settings.json`; off in dev).
 
 ---
 
@@ -370,8 +371,9 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 
 | Panel          | Hash                   | Access     | Content                                                                                                                                                                                                                                                             |
 | -------------- | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Login          | `#/login`              | logged out | email, password, link to Register                                                                                                                                                                                                                                   |
+| Login          | `#/login`              | logged out | email, password, "Forgot password?" (opens Reset password), link to Register                                                                                                                                                                                        |
 | Register       | `#/register`           | logged out | display name, email, password + confirm, a "minimum age + Terms of Use" checkbox (required) with links to the Terms and the Privacy Policy (§5.11), link to Login                                                                                                   |
+| Reset password | — (no route)           | logged out | email (prefilled from the login form), "Send link"; then "If an account uses <email>, we sent it a link…", "send it again", link to Login (§4.6)                                                                                                                    |
 | Profile        | `#/profile`            | logged in  | display name, avatar, change email (PocketBase email-change flow), change password (needs old password), "Your data" (points to the Privacy Policy for export and deletion), log out, delete account (confirmation typed inside the panel, no browser dialogs)      |
 | New campsite   | `#/new`                | logged in  | form from §5.5, draft pin on the map                                                                                                                                                                                                                                |
 | Campsite       | `#/campsite/<id>`      | public     | photos (thumbnail strip; a click opens the photo viewer, see below), title, author, stats, tags, tent capacity, coordinates (copy button), description, rating widget (not on your own campsite), comments + comment box, Report buttons; Edit/Delete if it's yours |
@@ -590,6 +592,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0017 — Photos are re-encoded in the browser before upload (2048 px, WebP or JPEG), which removes their metadata; lossless `strip_metadata` as a safety net and fallback; photos whose metadata can't be removed are refused.
 - 0018 — Password fields on phones: eframe's hidden text input is hidden with CSS and switched to `type="password"` while a password field is focused on touch screens, so phone keyboards send plain keystrokes.
 - 0019 — "Locate me" button at the bottom-right of the map: one browser position per click (permission asked on click only, automatic on load once already granted), kept in memory to center the map and draw a "you are here" dot, never sent or saved.
+- 0020 — Forgot password: a Reset password panel reached from Login sends PocketBase's reset email; the link opens PocketBase's own page, like email confirmation; the panel never says whether an account exists; reset emails get their own rate limit.
 
 ---
 
@@ -616,6 +619,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
 - Consent panel for analytics (§5.12), built and tested but disabled until analytics are added.
 - "Locate me" button: centers the map on the visitor and shows their position (§5.5, ADR 0019).
+- "Forgot password?" on the Login panel: a reset link by email, then PocketBase's own page sets the new password (§4.6, ADR 0020).
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 

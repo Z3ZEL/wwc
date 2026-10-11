@@ -65,6 +65,8 @@ expect "user cannot verify themselves"     400 "$(req PATCH "/api/collections/us
 expect "user cannot edit another user"     404 "$(req PATCH "/api/collections/users/records/$B_ID" "$A" '{"name":"x"}')"
 expect "anonymous can view a profile"      200 "$(req GET "/api/collections/users/records/$A_ID" "")"
 [ "$(jq -r '.email // ""' "$BODYF")" = "" ]; expect "profile does not expose email" 0 "$?"
+expect "password reset email: account"     204 "$(req POST /api/collections/users/request-password-reset "" "{\"email\":\"owner-$RUN@example.com\"}")"
+expect "same answer without an account"    204 "$(req POST /api/collections/users/request-password-reset "" "{\"email\":\"nobody-$RUN@example.com\"}")"
 
 echo "campsites"
 expect "anonymous cannot create"           400 "$(req POST /api/collections/campsites/records "" "$SITE")"
