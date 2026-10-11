@@ -121,7 +121,7 @@
     "notice_max_width": 480.0,
     "map_button_size": 40.0,
     "welcome_width": 360.0,
-    "welcome_max_height": 600.0
+    "welcome_height_ratio": 0.3333
   },
 
   "map": {

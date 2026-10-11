@@ -36,7 +36,7 @@ pub fn show(
         Some(card) => map.bottom().min(card.top()),
         None => map.bottom(),
     };
-    let height = theme.layout.welcome_max_height.min(bottom - margin - origin.y);
+    let height = (map.height() * theme.layout.welcome_height_ratio).min(bottom - margin - origin.y);
     if width < 2.0 * icon + pad.sum().x || height < icon {
         return None;
     }
@@ -86,7 +86,7 @@ fn expanded(ui: &mut Ui, width: f32, height: f32, state: &AppState, theme: &Them
         });
     });
     let body = height - ui.min_rect().height() - theme.spacing.item_spacing[1];
-    ScrollArea::vertical().id_salt(tab.title()).max_height(body.max(0.0)).auto_shrink([false, true]).show(ui, |ui| {
+    ScrollArea::vertical().id_salt(tab.title()).max_height(body.max(0.0)).auto_shrink([false, false]).show(ui, |ui| {
         match tab {
             WelcomeTab::Welcome => document_body(ui, state, theme, WELCOME, actions),
             WelcomeTab::Updates => updates(ui, state, theme, actions),

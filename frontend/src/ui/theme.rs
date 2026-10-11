@@ -185,8 +185,8 @@ pub struct Layout {
     /// Widest the welcome card at the top-left of the map gets; it shrinks so the zoom
     /// buttons always fit on its right.
     pub welcome_width: f32,
-    /// Tallest the welcome card gets; its text scrolls beyond that.
-    pub welcome_max_height: f32,
+    /// Share of the map's height the welcome card takes; its text scrolls beyond that.
+    pub welcome_height_ratio: f32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -401,7 +401,10 @@ mod tests {
         assert!(t.layout.map_button_size >= t.layout.icon_button_size, "the locate button is a touch target");
         assert!(t.map.my_location_radius > 0.0);
         assert!(t.map.zoom_button_size > 0.0 && t.map.zoom_button_gap >= 0.0);
-        assert!(t.layout.welcome_max_height > t.layout.icon_button_size, "the welcome card has room for its tabs");
+        assert!(
+            t.layout.welcome_height_ratio > 0.0 && t.layout.welcome_height_ratio <= 1.0,
+            "the welcome card fits in the map"
+        );
     }
 
     #[test]

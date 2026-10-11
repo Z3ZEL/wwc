@@ -400,7 +400,7 @@ Behavior:
 
 **Privacy notice** (`ui/notice.rs`): a card at the bottom-center of the map, above the footer, until the user clicks "Got it" (§5.11).
 
-**Welcome card** (`ui/welcome_card.rs`, ADR 0020): a floating card in the top-left corner of the map (an `Area` constrained to the map, `spacing.map_button_margin` from its edges), semi-transparent (`colors.welcome_bg`), at most `layout.welcome_width` wide (narrower when the zoom buttons wouldn't fit on its right) and `layout.welcome_max_height` tall, and it stops above the privacy notice or consent panel when they would overlap (phones). Its text scrolls.
+**Welcome card** (`ui/welcome_card.rs`, ADR 0020): a floating card in the top-left corner of the map (an `Area` constrained to the map, `spacing.map_button_margin` from its edges), semi-transparent (`colors.welcome_bg`), at most `layout.welcome_width` wide (narrower when the zoom buttons wouldn't fit on its right) and a third of the map's height tall (`layout.welcome_height_ratio`), and it stops above the privacy notice or consent panel when they would overlap (phones). Its text scrolls.
 
 - **Tabs** (`widgets::tabs`): **Welcome** shows the `welcome` document (§5.11); links to other documents open them in the Document panel. **Updates** shows the latest releases, newest first: tag, title, a "Pre-release" badge, date, notes (Markdown) and "View on GitHub" (new tab), with loading, error + Retry and "No updates yet." states.
 - **Collapse** (◀) shrinks it to a "▶ Welcome" / "▶ Updates" button; the zoom buttons follow it.
