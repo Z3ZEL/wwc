@@ -6,7 +6,7 @@
   (backend/pb_settings.json), backups (PB_BACKUPS_MAX_KEEP), public API rules (docs/API.md).
 -->
 
-> **In short:** we only collect what the site needs to work: your email address and display name, what you post, and short-lived technical logs. No ads, no analytics, no tracking, and we never sell data. What you post is public. You can ask for a copy of your data, or for its deletion, at any time.
+> **In short:** we only collect what the site needs to work: your email address and display name, what you post, and short-lived technical logs. Audience measurement only if you accept it, without cookies. No ads, no tracking across other sites, and we never sell data. What you post is public. You can ask for a copy of your data, or for its deletion, at any time.
 
 ## 1. Who is responsible
 
@@ -23,6 +23,8 @@ _Legal basis:_ our legitimate interest in running a secure service (GDPR, articl
 **Map images.** The map background is loaded directly from the servers of the OpenStreetMap Foundation, which therefore receive your IP address and the address of the page, like any website you visit. The Foundation is an independent controller: see its [privacy policy](https://osmfoundation.org/wiki/Privacy_Policy).
 
 _Legal basis:_ our legitimate interest in showing a map (article 6(1)(f)).
+
+**Audience measurement, only if you accept it.** See section 5.
 
 **Browser storage.** See section 5.
 
@@ -61,7 +63,7 @@ Only emails about your account: the address confirmation, and messages about you
 
 ### What we don't do
 
-No advertising, no analytics or audience measurement, no profiling, no automated decisions about you, no sale or rental of data.
+No advertising, no audience measurement without your consent, no profiling, no automated decisions about you, no sale or rental of data.
 
 ## 3. Who receives your data
 
@@ -70,45 +72,37 @@ The site runs on service providers that process data on our behalf and on our in
 - website hosting: {{frontend_host}};
 - server and database hosting: {{backend_host}};
 - storage of photos and backups: {{storage_provider}};
-- email delivery: {{email_provider}}.
+- email delivery: {{email_provider}};
+- audience measurement, only if you accept it: {{analytics_provider}}.
 
 The OpenStreetMap Foundation receives the requests for map images as an independent controller (section 2). We may also disclose data when the law requires it, for example to a court or an authority.
 
 ## 4. Transfers outside the European Union
 
-Some of these providers may process data outside the European Economic Area: our website host, for example, is based in the United States. Such transfers rely on an adequacy decision of the European Commission (such as the EU–US Data Privacy Framework, for certified companies) or on the Commission's standard contractual clauses. Write to us for more information or a copy of these safeguards.
+Some of these providers may process data outside the European Economic Area: our website host and our audience measurement provider, for example, are based in the United States. Such transfers rely on an adequacy decision of the European Commission (such as the EU–US Data Privacy Framework, for certified companies) or on the Commission's standard contractual clauses. Write to us for more information or a copy of these safeguards.
 
-## 5. Browser storage and cookies
+## 5. Browser storage, cookies and audience measurement
 
-The site doesn't use cookies. It keeps two items in your browser's local storage, only because you need them:
+The site doesn't use cookies. It keeps these items in your browser's local storage, only because you need them:
 
 - `wwc_session`: your login session (a token and your basic account details), so you stay logged in. It is cleared when you log out, and stops working when the session expires.
 - `wwc_notice`: that you closed the privacy notice, so it doesn't come back until this policy changes.
+- `wwc_consent`: the choices you made in the "Cookies and analytics" panel, and when, so we don't ask again for 6 months. It is needed to respect your choice.
 
-Both are strictly necessary for the service you ask for, so they don't need your consent. There are no analytics, advertising or social media trackers. You can delete them at any time in your browser settings.
+They are strictly necessary for the service you ask for, so they don't need your consent. You can delete them at any time in your browser settings.
 
-<!--
-  Draft for when consent is enabled (frontend/assets/consent.json, ARCHITECTURE §5.12). Replace the
-  paragraph above with it, fill in the analytics details, and bump "updated" in documents.json.
+**Audience measurement, only if you accept it.** With your consent, we measure how the site is used with Umami, provided by {{analytics_provider}}: visits, the address of the page and the site you came from, your browser, operating system, device type, screen size and language, your country (derived from your IP address, which Umami doesn't store), and what you do on the site, such as opening a campsite, searching, using the filters, signing up or adding a campsite. These events contain no account details, no search text and no position. Umami sets no cookie and stores nothing in your browser, and it doesn't follow you on other sites. If your browser sends "Do Not Track", nothing is measured. Nothing is loaded from Umami before you accept. We use it only to improve the site, never for advertising.
 
-- `wwc_consent`: the choices you made in the "Cookies and analytics" panel, and when, so we don't ask
-  again for 6 months. It is needed to respect your choice, so it doesn't need consent either.
-
-**Audience measurement, only if you accept it.** With your consent, we measure how the site is used:
-[which data: pages or panels opened, approximate location from the IP address, browser type…], with
-[analytics provider, and where it processes data]. [What it stores in your browser, and for how long.]
-We use it only to improve the site, never for advertising.
-_Legal basis:_ your consent (article 6(1)(a)). You can withdraw it at any time with "Privacy choices" at
-the bottom of the map; this doesn't affect what was measured before. _Kept:_ [retention].
+_Legal basis:_ your consent (article 6(1)(a)). You can withdraw it at any time with "Privacy choices" at the bottom of the map; this doesn't affect what was measured before. _Kept:_ {{analytics_retention}}.
 
 There are no advertising or social media trackers.
--->
 
 ## 6. How long we keep data
 
 - **Account:** until you delete it.
 - **Content you posted:** until you delete it, moderation removes it, or you delete your account.
 - **Server logs:** {{log_retention_days}} days.
+- **Audience measurement:** {{analytics_retention}}.
 - **Backups:** the server is backed up every day, and each backup is kept {{backup_retention_days}} days. Deleted data therefore disappears from backups within {{backup_retention_days}} days.
 - **Messages you send us:** as long as needed to handle them.
 
