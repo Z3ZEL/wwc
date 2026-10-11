@@ -1,5 +1,6 @@
 //! Browser APIs egui doesn't cover (wasm only). Called from the controller, never from UI code.
 
+pub mod analytics;
 mod file_picker;
 mod geolocation;
 mod photo;

@@ -5,6 +5,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use crate::actions::{Action, Event};
+use crate::analytics::{self, Analytics, Change};
 use crate::api::ApiClient;
 use crate::api::models::Session;
 use crate::config;
@@ -36,6 +37,8 @@ pub struct WwcApp {
     password_keyboard: bool,
     /// Where the welcome card was drawn last frame: the map's zoom buttons go on its right.
     welcome_card: Option<egui::Rect>,
+    /// Umami analytics, while the visitor allows them (§5.12).
+    analytics: Analytics,
 }
 
 impl WwcApp {
@@ -78,7 +81,9 @@ impl WwcApp {
             page_title: String::new(),
             password_keyboard: false,
             welcome_card: None,
+            analytics: Analytics::default(),
         };
+        sync_analytics(&mut app.analytics, &app.state);
         for action in [
             Action::RefreshSession,
             Action::RefreshCount,
@@ -94,13 +99,28 @@ impl WwcApp {
 
 impl eframe::App for WwcApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let Self { state, theme, controller, events, map, seo, page_title, password_keyboard, welcome_card: card_rect } =
-            self;
+        let Self {
+            state,
+            theme,
+            controller,
+            events,
+            map,
+            seo,
+            page_title,
+            password_keyboard,
+            welcome_card: card_rect,
+            analytics,
+        } = self;
 
         let mut actions = Vec::new();
         while let Ok(event) = events.try_recv() {
+            if let Some(e) = analytics.for_event(&event) {
+                crate::web::analytics::track(e);
+            }
             actions.extend(state::apply(state, event));
         }
+        // Only what the visitor does in the UI is measured, not the follow-ups of events.
+        let from_ui = actions.len();
 
         top_bar::show(ui, state, theme, &mut actions);
         panels::show(ui, state, theme, &mut actions);
@@ -132,9 +152,14 @@ impl eframe::App for WwcApp {
         photo_viewer::show(ui.ctx(), state, theme);
         widgets::toasts(ui.ctx(), theme, &mut state.toasts);
 
-        for action in actions {
+        for (i, action) in actions.into_iter().enumerate() {
+            if let Some(e) = analytics.for_action(state, &action).filter(|_| i >= from_ui) {
+                crate::web::analytics::track(e);
+            }
             controller.handle(state, action);
         }
+        // A consent choice saved this frame starts or stops analytics at once.
+        sync_analytics(analytics, state);
 
         let title = seo.page_title(state);
         if *page_title != title {
@@ -170,5 +195,13 @@ impl eframe::App for WwcApp {
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         self.theme.colors.background.to_normalized_gamma_f32()
+    }
+}
+
+/// Loads Umami once the visitor accepts analytics, and stops sending when they withdraw.
+fn sync_analytics(analytics: &mut Analytics, state: &AppState) {
+    let Some(website_id) = config::umami_website_id() else { return };
+    if analytics.sync(state.consent_allows(analytics::PURPOSE)) == Some(Change::Start) {
+        crate::web::analytics::start(website_id, config::umami_script_url());
     }
 }

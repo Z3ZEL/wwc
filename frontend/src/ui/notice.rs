@@ -1,6 +1,7 @@
-//! Privacy notice at the bottom of the map, until dismissed. It informs, it doesn't ask:
-//! the app stores nothing that needs consent (only the login session and this notice's
-//! state), so there is no cookie banner to accept or refuse (ARCHITECTURE §5.11).
+//! Privacy notice at the bottom of the map, until dismissed, in builds without analytics (no
+//! Umami website id, §5.12). It informs, it doesn't ask: such a build stores nothing that needs
+//! consent (only the login session and this notice's state), so there is no cookie banner to
+//! accept or refuse (ARCHITECTURE §5.11). Builds with analytics show the consent panel instead.
 //! It comes back once when the Privacy Policy's `updated` date changes.
 
 use egui::{Align2, Area, Frame, Id, Order, Rect, RichText, Stroke, Vec2};
