@@ -5,6 +5,7 @@ mod panel_frame;
 mod photo_strip;
 mod range_slider;
 mod spinner;
+mod tabs;
 mod toasts;
 
 pub use markdown::markdown;
@@ -12,6 +13,7 @@ pub use panel_frame::panel_frame;
 pub use photo_strip::{PhotoStripResponse, StripStyle, Thumb, photo_strip};
 pub use range_slider::range_slider;
 pub use spinner::{Spinner, SpinnerSize, loading, loading_block, spinner};
+pub use tabs::tabs;
 pub use toasts::toasts;
 
 use egui::{Button, Color32, Response, RichText, Sense, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText};

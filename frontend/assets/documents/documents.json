@@ -44,6 +44,12 @@
       "title": "Credits and licenses",
       "file": "credits.md",
       "updated": "2026-09-29"
+    },
+    {
+      "id": "welcome",
+      "title": "Welcome",
+      "file": "welcome.md",
+      "updated": "2026-10-10"
     }
   ]
 }

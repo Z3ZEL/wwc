@@ -32,9 +32,9 @@ jobs:
       - name: Clippy (wasm)
         run: cargo clippy -p frontend --target wasm32-unknown-unknown -- -D warnings
       - name: Clippy (host lib + tests)
-        run: cargo clippy -p frontend --lib --tests -- -D warnings
+        run: cargo clippy -p frontend -p changelog-gen --lib --tests -- -D warnings
       - name: Test
-        run: cargo test -p frontend --lib
+        run: cargo test -p frontend -p changelog-gen --lib
 
   backend-rules:
     runs-on: ubuntu-latest

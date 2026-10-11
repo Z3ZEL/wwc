@@ -1,0 +1,28 @@
+{
+  "releases": [
+    {
+      "tag": "v1.0.0",
+      "title": "Example release (dev fixture)",
+      "date": "2026-10-10",
+      "prerelease": false,
+      "url": "https://github.com/Z3ZEL/wwc/releases/tag/v1.0.0",
+      "notes": "Sample notes shown by `trunk serve`, written like GitHub's generated release notes.\n\n## What's Changed\n* feat: locate me button by @Z3ZEL in https://github.com/Z3ZEL/wwc/pull/11\n* fix: password fields on phones by @Z3ZEL in https://github.com/Z3ZEL/wwc/pull/10\n\n**Full Changelog**: https://github.com/Z3ZEL/wwc/compare/1.0-rc.2...v1.0.0"
+    },
+    {
+      "tag": "1.0-rc.2",
+      "title": "Workflow adjustment",
+      "date": "2026-09-27",
+      "prerelease": true,
+      "url": "https://github.com/Z3ZEL/wwc/releases/tag/1.0-rc.2",
+      "notes": "Still improving the workflow"
+    },
+    {
+      "tag": "1.0-rc.1",
+      "title": "Pre-release",
+      "date": "2026-09-27",
+      "prerelease": true,
+      "url": "https://github.com/Z3ZEL/wwc/releases/tag/1.0-rc.1",
+      "notes": "Testing workflow"
+    }
+  ]
+}

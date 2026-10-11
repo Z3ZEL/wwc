@@ -4,6 +4,7 @@
 
 pub mod actions;
 pub mod api;
+pub mod changelog;
 pub mod config;
 pub mod consent;
 pub mod controller;

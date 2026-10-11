@@ -23,6 +23,8 @@ const SERVED_DIR: &str = "documents";
 /// Documents the app links to from its own screens.
 pub const TERMS: &str = "terms";
 pub const PRIVACY: &str = "privacy";
+/// The Welcome tab of the welcome card on the map.
+pub const WELCOME: &str = "welcome";
 
 /// A var whose value contains this still needs its real value before going live
 /// (`tools/seo-gen` warns about them on every build).
@@ -244,6 +246,7 @@ mod tests {
         for id in [TERMS, PRIVACY] {
             assert!(m.get(id).is_some_and(|d| d.footer), "{id} must exist and be in the footer");
         }
+        assert!(m.get(WELCOME).is_some_and(|d| !d.footer), "the welcome text is in the map card, not the footer");
         assert!(m.var("min_age").and_then(|a| a.parse::<u8>().ok()).is_some(), "min_age is a number");
     }
 

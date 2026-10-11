@@ -42,7 +42,15 @@ impl MapView {
         }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, state: &mut AppState, theme: &Theme, actions: &mut Vec<Action>) {
+    /// `beside`: the welcome card at the top-left of the map; the zoom buttons go on its right.
+    pub fn show(
+        &mut self,
+        ui: &mut Ui,
+        state: &mut AppState,
+        theme: &Theme,
+        beside: Option<Rect>,
+        actions: &mut Vec<Action>,
+    ) {
         if let Some((lat, lng)) = state.map_focus.take() {
             self.memory.center_at(lat_lon(lat, lng));
             if self.memory.zoom() < theme.map.focus_zoom {
@@ -67,16 +75,19 @@ impl MapView {
             let _ = self.memory.set_zoom((self.memory.zoom() + theme.map.cluster_zoom_step).min(theme.map.max_zoom));
         }
         state.map_center = (center.y(), center.x());
-        self.zoom_buttons(ui, rect, theme);
+        self.zoom_buttons(ui, rect, beside, theme);
         self.report_viewport(ui, bbox, actions);
     }
 
-    fn zoom_buttons(&mut self, ui: &mut Ui, rect: Rect, theme: &Theme) {
-        let size = Vec2::splat(28.0);
-        let origin = rect.left_top() + Vec2::splat(12.0);
+    /// +/− in the top-left corner, or on the right of the welcome card when it is shown.
+    fn zoom_buttons(&mut self, ui: &mut Ui, rect: Rect, beside: Option<Rect>, theme: &Theme) {
+        let size = Vec2::splat(theme.map.zoom_button_size);
+        let margin = theme.spacing.map_button_margin;
+        let left = beside.map_or(rect.left(), |card| card.right()) + margin;
+        let origin = Pos2::new(left.min(rect.right() - margin - size.x), rect.top() + margin);
         let zoom_in = ui.put(Rect::from_min_size(origin, size), Button::new(RichText::new("+").strong()));
         let zoom_out = ui.put(
-            Rect::from_min_size(origin + Vec2::new(0.0, size.y + 4.0), size),
+            Rect::from_min_size(origin + Vec2::new(0.0, size.y + theme.map.zoom_button_gap), size),
             Button::new(RichText::new("−").strong()),
         );
         if zoom_in.clicked() && self.memory.zoom() < theme.map.max_zoom {

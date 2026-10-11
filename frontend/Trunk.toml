@@ -15,3 +15,10 @@ watch = ["src", "assets", "index.html"]
 stage = "post_build"
 command = "cargo"
 command_arguments = ["run", "--quiet", "--release", "-p", "seo-gen"]
+
+# Write releases.json (the latest GitHub Releases) for the Updates tab of the welcome card
+# (tools/changelog-gen, ARCHITECTURE §5.6). Release builds call GitHub; dev builds use a fixture.
+[[hooks]]
+stage = "post_build"
+command = "cargo"
+command_arguments = ["run", "--quiet", "--release", "-p", "changelog-gen"]
