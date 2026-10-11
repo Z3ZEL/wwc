@@ -1,6 +1,6 @@
 //! Trunk `post_build` hook (frontend/Trunk.toml). Writes `releases.json` into
 //! `TRUNK_STAGING_DIR`: the latest GitHub Releases of the repository named in
-//! `assets/updates.json`, for the Updates tab of the welcome card (ARCHITECTURE §5.6, ADR 0020).
+//! `assets/updates.json`, for the Updates tab of the welcome card (ARCHITECTURE §5.6, ADR 0021).
 //!
 //! Release builds call the GitHub API, with `GITHUB_TOKEN` as a bearer token when it is set.
 //! Dev builds use the recorded fixture (`WWC_CHANGELOG=fetch|fixture|off` overrides).

@@ -114,7 +114,7 @@ wwc/
 │           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider, markdown, tabs
 ├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
 │                              # (+ warns about placeholder values in documents.json)
-├── tools/changelog-gen/     # host binary run by Trunk post_build: latest GitHub Releases → releases.json (ADR 0020)
+├── tools/changelog-gen/     # host binary run by Trunk post_build: latest GitHub Releases → releases.json (ADR 0021)
 ├── backend/
 │   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
 │   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
@@ -268,7 +268,8 @@ Shorthands used below (write them out in full in the real rules):
 
 - Email + password via PocketBase auth collection. OAuth2 providers (Google, GitHub…) can be enabled later with no frontend architecture change.
 - Email verification is required before posting: `VERIFIED` in the create rules (§4.3). Registering sends the confirmation email (`request-verification`); the link opens PocketBase's own confirmation page (`PB_APP_URL/_/#/auth/confirm-verification/…`). The UI replaces create forms with "Confirm your email" + "Resend email" / "I've confirmed it" (auth-refresh) while `verified` is false. SMTP comes from env (`pb_hooks/settings.pb.js`); in dev, mailpit catches the mail (§7).
-- Built-in rate limiting is on for auth and create endpoints (`backend/pb_settings.json`; off in dev).
+- **Forgot password** (ADR 0020): the Login panel links to a Reset password panel that calls `request-password-reset`. PocketBase emails a link to its own page for choosing a new password (`PB_APP_URL/_/#/auth/confirm-password-reset/…`), which also signs the account out everywhere. Then the user logs in. PocketBase answers 204 whether or not an account uses the email, so the panel only says "if an account uses <email>, we sent it a link".
+- Built-in rate limiting is on for auth and create endpoints, and for password reset emails (`backend/pb_settings.json`; off in dev).
 
 ---
 
@@ -374,8 +375,9 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 
 | Panel          | Hash                   | Access     | Content                                                                                                                                                                                                                                                             |
 | -------------- | ---------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Login          | `#/login`              | logged out | email, password, link to Register                                                                                                                                                                                                                                   |
+| Login          | `#/login`              | logged out | email, password, "Forgot password?" (opens Reset password), link to Register                                                                                                                                                                                        |
 | Register       | `#/register`           | logged out | display name, email, password + confirm, a "minimum age + Terms of Use" checkbox (required) with links to the Terms and the Privacy Policy (§5.11), link to Login                                                                                                   |
+| Reset password | — (no route)           | logged out | email (prefilled from the login form), "Send link"; then "If an account uses <email>, we sent it a link…", "send it again", link to Login (§4.6)                                                                                                                    |
 | Profile        | `#/profile`            | logged in  | display name, avatar, change email (PocketBase email-change flow), change password (needs old password), "Your data" (points to the Privacy Policy for export and deletion), log out, delete account (confirmation typed inside the panel, no browser dialogs)      |
 | New campsite   | `#/new`                | logged in  | form from §5.5, draft pin on the map                                                                                                                                                                                                                                |
 | Campsite       | `#/campsite/<id>`      | public     | photos (thumbnail strip; a click opens the photo viewer, see below), title, author, stats, tags, tent capacity, coordinates (copy button), description, rating widget (not on your own campsite), comments + comment box, Report buttons; Edit/Delete if it's yours |
@@ -400,7 +402,7 @@ Behavior:
 
 **Privacy notice** (`ui/notice.rs`): a card at the bottom-center of the map, above the footer, until the user clicks "Got it" (§5.11).
 
-**Welcome card** (`ui/welcome_card.rs`, ADR 0020): a floating card in the top-left corner of the map (an `Area` constrained to the map, `spacing.map_button_margin` from its edges), semi-transparent (`colors.welcome_bg`), at most `layout.welcome_width` wide (narrower when the zoom buttons wouldn't fit on its right) and a third of the map's height tall (`layout.welcome_height_ratio`), and it stops above the privacy notice or consent panel when they would overlap (phones). Its text scrolls.
+**Welcome card** (`ui/welcome_card.rs`, ADR 0021): a floating card in the top-left corner of the map (an `Area` constrained to the map, `spacing.map_button_margin` from its edges), semi-transparent (`colors.welcome_bg`), at most `layout.welcome_width` wide (narrower when the zoom buttons wouldn't fit on its right) and a third of the map's height tall (`layout.welcome_height_ratio`), and it stops above the privacy notice or consent panel when they would overlap (phones). Its text scrolls.
 
 - **Tabs** (`widgets::tabs`): **Welcome** shows the `welcome` document (§5.11); links to other documents open them in the Document panel. **Updates** shows the latest releases, newest first: tag, title, a "Pre-release" badge, date, notes (Markdown) and "View on GitHub" (new tab), with loading, error + Retry and "No updates yet." states.
 - **Collapse** (◀) shrinks it to a "▶ Welcome" / "▶ Updates" button; the zoom buttons follow it.
@@ -456,7 +458,7 @@ The UI is a canvas, so search engines and link-preview scrapers only see the sta
 
 ### 5.11 Documents and legal pages (`frontend/assets/documents/`)
 
-Long texts shown in the app are Markdown files in `frontend/assets/documents/`, listed in `documents.json`: today the Terms of Use, Privacy Policy, Legal Notice, Credits and the welcome text of the map's welcome card (`documents::WELCOME`, fetched at startup); tomorrow any guide or FAQ (ADR 0016). Release notes are not documents: they come from GitHub Releases (§5.6, ADR 0020).
+Long texts shown in the app are Markdown files in `frontend/assets/documents/`, listed in `documents.json`: today the Terms of Use, Privacy Policy, Legal Notice, Credits and the welcome text of the map's welcome card (`documents::WELCOME`, fetched at startup); tomorrow any guide or FAQ (ADR 0016). Release notes are not documents: they come from GitHub Releases (§5.6, ADR 0021).
 
 - **Manifest** (`documents.json`, compiled in, `src/documents/mod.rs`): `vars`, and `documents` with `id`, `title`, optional `short_title` (footer link text), `file`, `updated` (`YYYY-MM-DD`) and `footer` (linked from the map footer, in manifest order). `documents::TERMS` and `PRIVACY` are the ids the code links to.
 - **Files are fetched, not compiled in.** `index.html` copies the folder next to the app (Trunk `copy-dir`). Opening a document fetches `documents/<file>?v=<updated>` once per session (`api::fetch_text` → `Event::Document`, kept parsed in `AppState::documents`), so documents cost nothing in the wasm bundle and can be long. `?v=` changes with `updated`, so no cache serves an old version: **bump `updated` with every change readers can see** (it is also the "Last updated" date shown; editing an HTML comment doesn't count). An HTML response (a static host's SPA fallback for a missing file) counts as not found.
@@ -602,7 +604,8 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0017 — Photos are re-encoded in the browser before upload (2048 px, WebP or JPEG), which removes their metadata; lossless `strip_metadata` as a safety net and fallback; photos whose metadata can't be removed are refused.
 - 0018 — Password fields on phones: eframe's hidden text input is hidden with CSS and switched to `type="password"` while a password field is focused on touch screens, so phone keyboards send plain keystrokes.
 - 0019 — "Locate me" button at the bottom-right of the map: one browser position per click (permission asked on click only, automatic on load once already granted), kept in memory to center the map and draw a "you are here" dot, never sent or saved.
-- 0020 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
+- 0020 — Forgot password: a Reset password panel reached from Login sends PocketBase's reset email; the link opens PocketBase's own page, like email confirmation; the panel never says whether an account exists; reset emails get their own rate limit.
+- 0021 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
 
 ---
 
@@ -629,7 +632,8 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
 - Consent panel for analytics (§5.12), built and tested but disabled until analytics are added.
 - "Locate me" button: centers the map on the visitor and shows their position (§5.5, ADR 0019).
-- Welcome card at the top-left of the map: a welcome text and the latest release notes, synced from GitHub Releases at build time (§5.6, ADR 0020).
+- "Forgot password?" on the Login panel: a reset link by email, then PocketBase's own page sets the new password (§4.6, ADR 0020).
+- Welcome card at the top-left of the map: a welcome text and the latest release notes, synced from GitHub Releases at build time (§5.6, ADR 0021).
 
 **Schema ready, UI not built yet:** the `hidden` flag and the admin `role` (admins can already hide content through the API).
 

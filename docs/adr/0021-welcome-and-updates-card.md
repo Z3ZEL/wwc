@@ -1,4 +1,4 @@
-# 0020 — Welcome card with release notes synced from GitHub Releases
+# 0021 — Welcome card with release notes synced from GitHub Releases
 
 Status: proposed (2026-10-10).
 

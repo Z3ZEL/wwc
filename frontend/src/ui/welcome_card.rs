@@ -1,4 +1,4 @@
-//! The welcome card at the top-left of the map (ARCHITECTURE §5.6, ADR 0020): a "Welcome" tab
+//! The welcome card at the top-left of the map (ARCHITECTURE §5.6, ADR 0021): a "Welcome" tab
 //! with the `welcome` document, and an "Updates" tab with the latest releases (`changelog`).
 //! It floats over the map like the privacy notice, semi-transparent, and collapses to a small
 //! button. Nothing about it is saved: it opens on wide screens and starts collapsed on phones.

@@ -1,4 +1,4 @@
-//! Release notes for the Updates tab of the welcome card (ARCHITECTURE §5.6, ADR 0020).
+//! Release notes for the Updates tab of the welcome card (ARCHITECTURE §5.6, ADR 0021).
 //!
 //! `tools/changelog-gen` writes `releases.json` next to the app at build time, from the
 //! repository's GitHub Releases. The app fetches it the first time the tab is shown, so
