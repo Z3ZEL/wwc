@@ -3,6 +3,7 @@
 //! host so `cargo test` runs without a browser.
 
 pub mod actions;
+pub mod analytics;
 pub mod api;
 pub mod changelog;
 pub mod config;

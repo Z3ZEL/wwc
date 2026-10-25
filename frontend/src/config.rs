@@ -13,6 +13,21 @@ pub fn build_id() -> &'static str {
     url_safe_or_dev(option_env!("WWC_BUILD_ID"))
 }
 
+/// Umami Cloud website id from `WWC_UMAMI_WEBSITE_ID` (ADR 0022). `None` when unset or not a
+/// UUID: the build then has no analytics and no consent panel.
+pub fn umami_website_id() -> Option<&'static str> {
+    uuid_or_none(option_env!("WWC_UMAMI_WEBSITE_ID"))
+}
+
+/// The Umami tracker script, from `WWC_UMAMI_SCRIPT_URL` (copy it from the Umami dashboard,
+/// e.g. for the EU region). Defaults to Umami Cloud's.
+pub fn umami_script_url() -> &'static str {
+    match option_env!("WWC_UMAMI_SCRIPT_URL").map(str::trim) {
+        Some(url) if url.starts_with("https://") => url,
+        _ => "https://cloud.umami.is/script.js",
+    }
+}
+
 fn trim_base(url: &str) -> &str {
     url.trim().trim_end_matches('/')
 }
@@ -22,6 +37,17 @@ fn url_safe_or_dev(id: Option<&str>) -> &str {
     id.map(str::trim)
         .filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)))
         .unwrap_or("dev")
+}
+
+/// `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (hex digits), or `None`.
+fn uuid_or_none(id: Option<&str>) -> Option<&str> {
+    id.map(str::trim).filter(|id| {
+        id.len() == 36
+            && id.char_indices().all(|(i, c)| match i {
+                8 | 13 | 18 | 23 => c == '-',
+                _ => c.is_ascii_hexdigit(),
+            })
+    })
 }
 
 #[cfg(test)]
@@ -44,5 +70,20 @@ mod tests {
         assert_eq!(url_safe_or_dev(Some("a&b=c")), "dev");
         assert_eq!(url_safe_or_dev(Some("a b")), "dev");
         assert!(!build_id().is_empty());
+    }
+
+    #[test]
+    fn umami_ids_are_uuids() {
+        let id = "94db1cb1-74f4-4a40-ad6c-962362670409";
+        assert_eq!(uuid_or_none(Some(id)), Some(id));
+        assert_eq!(
+            uuid_or_none(Some(" 94DB1CB1-74F4-4A40-AD6C-962362670409 ")),
+            Some("94DB1CB1-74F4-4A40-AD6C-962362670409")
+        );
+        assert_eq!(uuid_or_none(None), None);
+        assert_eq!(uuid_or_none(Some("")), None);
+        assert_eq!(uuid_or_none(Some("94db1cb1-74f4-4a40-ad6c-96236267040")), None, "too short");
+        assert_eq!(uuid_or_none(Some("94db1cb1-74f4-4a40-ad6c-96236267040\"")), None);
+        assert!(umami_script_url().starts_with("https://"));
     }
 }
