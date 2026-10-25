@@ -4,7 +4,8 @@
 # created when the database has none.
 #
 # Usage: backend/seed/seed.sh            (PB_URL defaults to http://localhost:8090)
-# Needs: curl, jq. Reads PB_ADMIN_EMAIL / PB_ADMIN_PASSWORD from .env.
+# Needs: curl, jq. Reads PB_ADMIN_EMAIL / PB_ADMIN_PASSWORD from .env. Rate limits must be off
+# (pb_settings.dev.json): it logs in more often than they allow. Test instances run it on boot (ADR 0023).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -39,6 +40,7 @@ for u in "${USERS[@]}"; do
     auth=$(login "$email" "$PASSWORD")
   fi
   read -r TOKEN[$u] ID[$u] <<<"$auth"
+  [ -n "${ID[$u]}" ] || { echo "can't log in as $email (rate limits on?)"; exit 1; }
   # Seed users skip the confirmation email: posting requires a verified email (ADR 0012).
   api PATCH "/api/collections/users/records/${ID[$u]}" "$ADMIN_TOKEN" '{"verified":true}' >/dev/null
   echo "user $email ($PASSWORD) id=${ID[$u]}"

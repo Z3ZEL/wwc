@@ -106,6 +106,16 @@ Check the S3 and SMTP settings from the dashboard (Settings → Files storage / 
 
 **Restoring:** with a new or empty volume, start the container, log in to the dashboard, open Settings → Backups, pick the latest backup from the bucket and click Restore. PocketBase restarts with that data.
 
+### Test instance (seeded demo data)
+
+A test backend built from `backend/Dockerfile` can fill itself with the dev seed data: the 3 users above and 50 campsites. Set these env vars on top of the production ones (full list in the "Test instance" block of `.env.example`):
+
+- `WWC_SEED=1`: seeds after each boot, once `/api/health` answers. The image needs `bash`, `curl` and `jq` for this, installed only when the build arg `WWC_SEED=1` is set. Render passes a service's env vars as build args, so the one variable does both. Elsewhere: `docker build --build-arg WWC_SEED=1 backend`.
+- `PB_SETTINGS_FILE=/pb_settings.dev.json`: rate limits off. With them on, the seed's logins get rejected.
+- `PB_ADMIN_EMAIL`, `PB_ADMIN_PASSWORD`: keep them set, with a strong password. The seed logs in as this superuser.
+
+On Render's free plan there's no disk: `/pb_data` is wiped on every deploy, restart and spin-down (15 minutes without traffic), so each boot starts from fresh, random demo data, and anything added by hand is lost. With a persistent disk, the seed fills it once and later boots skip the campsites. A pre-deploy command can't seed it: it runs on another machine without the disk. The seeded logins are public (`password123`, and alice is an app admin), so never put real data on a test instance. See ADR [0023](docs/adr/0023-seeded-test-instance.md).
+
 ## Checks
 
 ```sh

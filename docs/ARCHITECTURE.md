@@ -110,6 +110,7 @@ wwc/
 │           ├── consent_panel.rs # consent panel (replaces the notice once consent is enabled)
 │           ├── locate_button.rs # "Locate me" button at the bottom-right of the map
 │           ├── welcome_card.rs  # welcome card at the top-left of the map: Welcome + Updates tabs
+│           ├── photo_viewer.rs  # full-page photo carousel (modal); photo_zoom.rs: its zoom/pan geometry (host-tested)
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters, document
 │           └── widgets/       # panel_frame, toasts, buttons, stars, tag chips, form errors, range_slider, markdown, tabs
 ├── tools/seo-gen/           # host binary run by Trunk post_build: seo.json → index.html, robots.txt, sitemap.xml
@@ -117,11 +118,11 @@ wwc/
 ├── tools/changelog-gen/     # host binary run by Trunk post_build: latest GitHub Releases → releases.json (ADR 0021)
 ├── backend/
 │   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
-│   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
+│   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS, seed with WWC_SEED=1)
 │   ├── pb_migrations/         # Schema as code — committed
 │   ├── pb_hooks/              # *.pb.js server hooks — committed (settings.pb.js: settings from files + env)
 │   ├── pb_settings.json       # Instance settings as code (rate limits, logs, batch…); pb_settings.dev.json on top in dev
-│   ├── seed/seed.sh           # Dev seed data (curl + jq)
+│   ├── seed/seed.sh           # Dev seed data (curl + jq); test instances run it on boot (ADR 0023)
 │   └── tests/                 # rules.sh: API rule tests (curl + jq); fixtures/ (test image)
 └── docs/
     ├── ARCHITECTURE.md        # This file
@@ -369,7 +370,9 @@ The design is **plain and flat**: solid colors, no gradients, no shadows, few bo
 - Right, logged out: **Log in**, **Sign up**. Logged in: **+ New campsite**, then the avatar/name menu (Profile, Moderation if admin, Log out).
 - **Narrow screens** (phones): the bar is `layout.top_bar_height_narrow` tall and has two rows. The first row has the logo, the count and a **☰ menu** with every account button (Log in / Sign up, or the name, + New campsite, Profile, Log out). The second row has the search field, which fills the row, and Filters.
 
-**Photo viewer** (`ui/photo_viewer.rs`): an exception to "everything is a side panel" (the other is the welcome card, below). Clicking a campsite photo opens an egui `Modal` over the whole page (inset by `layout.photo_viewer_margin`, `photo_viewer_margin_narrow` on narrow screens, backdrop `colors.photo_viewer_backdrop`). It is a carousel: the current photo (`1200x1200f` thumb), fitted to the space, with ◀ ▶ on the sides (wrapping around), the title (truncated), "n / N" and × in the header, and a thumbnail row at the bottom with the current photo outlined. ← / → browse; Esc, × or a click on the backdrop close it. State is `CampsiteDetail::photo_open`, so it closes with the Campsite panel.
+**Photo viewer** (`ui/photo_viewer.rs`): an exception to "everything is a side panel" (the other is the welcome card, below). Clicking a campsite photo opens an egui `Modal` over the whole page (inset by `layout.photo_viewer_margin`, backdrop `colors.photo_viewer_backdrop`). It is a carousel: the current photo (`1200x1200f` thumb), fitted to the space, with ◀ ▶ on the sides (wrapping around), the title (truncated), "n / N" and × in the header, and a single row of thumbnails at the bottom with the current photo outlined; the row is centred when it fits, otherwise it scrolls sideways and follows the current photo. ← / → browse; Esc, × or a click on the backdrop close it. State is `CampsiteDetail::photo_open`, so it closes with the Campsite panel.
+- **Zoom** (`ui/photo_zoom.rs`, pure geometry with host tests): pinch, Ctrl/⌘ + wheel, the wheel (`layout.photo_viewer_wheel_zoom_speed`) or a double click / tap (to `photo_viewer_double_tap_zoom`, again to fit) zoom around the pointer or fingers, up to `photo_viewer_max_zoom`. A zoomed photo pans by dragging and never leaves a gap at its edges; "Fit" in the header or Esc unzooms (the next Esc closes). An unzoomed photo swipes: a horizontal drag past `photo_viewer_swipe_threshold` shows the next / previous one. Zoom and swipe state live in egui temporary memory and start over for each photo and each opening.
+- **Phones and portrait screens** (narrow, or taller than wide): full screen (`photo_viewer_margin_narrow` = 0, no corner radius, small padding), the photo takes the whole width, and ◀ ▶ are small buttons over its sides (`layout.icon_button_size`, hidden while zoomed) instead of columns; × has the same touch size.
 
 **Side panels:** only one is active at a time. They share one frame: a header with the title plus a collapse button (◀/▶) and a close button (✕), and a scrollable body.
 
@@ -536,6 +539,7 @@ Conventions:
 - **Email:** SMTP from `PB_SMTP_*`; `PB_APP_URL` is the public PocketBase URL used in email links.
 - **Instance settings as code:** `backend/pb_settings.json` (non-secret: rate limits, logs, batch, app name) → optional `PB_SETTINGS_FILE` (per-deployment overrides) → `pb_settings.dev.json` in dev → `PB_*` env vars (secrets, per-environment values). Applied on every boot by `pb_hooks/settings.pb.js`; the dashboard is for inspection. Upload limits are field options, so they change through a migration, not settings.
 - TLS termination, domain and the host itself are left to the platform.
+- **Test instance (ADR 0023):** the same image with `WWC_SEED=1`: the entrypoint runs `seed/seed.sh` in the background once `/api/health` answers, on every boot, since a disk-less host (Render free) starts from an empty `/pb_data`. The seed's tools (`bash`, `curl`, `jq`) are installed only when the build arg of the same name is set; Render passes env vars as build args. It needs `PB_SETTINGS_FILE=/pb_settings.dev.json` (rate limits off) and the superuser env vars kept set.
 
 ---
 
@@ -608,6 +612,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0020 — Forgot password: a Reset password panel reached from Login sends PocketBase's reset email; the link opens PocketBase's own page, like email confirmation; the panel never says whether an account exists; reset emails get their own rate limit.
 - 0021 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
 - 0022 — Audience measurement with Umami Cloud (free tier), only with consent: script loaded after "Accept", custom events from Rust, no personal data in events, off in builds without a website id.
+- 0023 — Test instances seed the dev data on every boot (`WWC_SEED=1`, background step in the entrypoint once PocketBase answers); the seed's tools are added to the image only by the build arg of the same name; rate limits off through `PB_SETTINGS_FILE`.
 
 ---
 
