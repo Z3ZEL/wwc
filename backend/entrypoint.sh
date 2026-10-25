@@ -17,4 +17,13 @@ set -- --http=0.0.0.0:8090
 # CORS: the frontend's origin(s), comma-separated. Unset = any origin (dev).
 [ -n "$PB_ORIGINS" ] && set -- "$@" --origins="$PB_ORIGINS"
 
+# Test instances (ADR 0023): seed demo data once PocketBase answers. Runs on every boot because a
+# disk-less host starts from an empty /pb_data; seed.sh skips what's already there.
+if [ "$WWC_SEED" = "1" ]; then
+  (
+    until wget -qO- http://127.0.0.1:8090/api/health >/dev/null 2>&1; do sleep 1; done
+    PB_URL=http://127.0.0.1:8090 /seed/seed.sh || echo "seed failed" >&2
+  ) &
+fi
+
 exec $PB serve "$@"

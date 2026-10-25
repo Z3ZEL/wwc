@@ -2,6 +2,7 @@
 # Production: mount a persistent volume on /pb_data (SQLite DB); configure through
 # pb_settings.json and env vars (see .env.example).
 # Dev (docker compose) bind-mounts pb_migrations, pb_hooks and the settings files over the copies.
+# Test instances: WWC_SEED=1 seeds demo data on every boot (ADR 0023).
 FROM alpine:3.22
 
 # PocketBase is pre-1.0: upgrades are deliberate, bump this in its own change.
@@ -26,6 +27,12 @@ COPY --chmod=755 entrypoint.sh /entrypoint.sh
 COPY pb_migrations /pb_migrations
 COPY pb_hooks /pb_hooks
 COPY pb_settings.json pb_settings.dev.json /
+
+# Test instances only: the seed script's tools. On Render a service's env vars are also build args,
+# so WWC_SEED=1 there installs them too. Release and dev builds don't set it.
+ARG WWC_SEED
+RUN if [ "$WWC_SEED" = "1" ]; then apk add --no-cache bash curl jq; fi
+COPY --chmod=755 seed/seed.sh /seed/seed.sh
 
 USER pocketbase
 VOLUME /pb_data

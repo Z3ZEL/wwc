@@ -118,11 +118,11 @@ wwc/
 ├── tools/changelog-gen/     # host binary run by Trunk post_build: latest GitHub Releases → releases.json (ADR 0021)
 ├── backend/
 │   ├── Dockerfile             # *Pinned*, checksum-verified PocketBase + migrations/hooks; dev and prod image
-│   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS)
+│   ├── entrypoint.sh          # migrate, upsert superuser, serve (automigrate only with PB_DEV=1, CORS from PB_ORIGINS, seed with WWC_SEED=1)
 │   ├── pb_migrations/         # Schema as code — committed
 │   ├── pb_hooks/              # *.pb.js server hooks — committed (settings.pb.js: settings from files + env)
 │   ├── pb_settings.json       # Instance settings as code (rate limits, logs, batch…); pb_settings.dev.json on top in dev
-│   ├── seed/seed.sh           # Dev seed data (curl + jq)
+│   ├── seed/seed.sh           # Dev seed data (curl + jq); test instances run it on boot (ADR 0023)
 │   └── tests/                 # rules.sh: API rule tests (curl + jq); fixtures/ (test image)
 └── docs/
     ├── ARCHITECTURE.md        # This file
@@ -539,6 +539,7 @@ Conventions:
 - **Email:** SMTP from `PB_SMTP_*`; `PB_APP_URL` is the public PocketBase URL used in email links.
 - **Instance settings as code:** `backend/pb_settings.json` (non-secret: rate limits, logs, batch, app name) → optional `PB_SETTINGS_FILE` (per-deployment overrides) → `pb_settings.dev.json` in dev → `PB_*` env vars (secrets, per-environment values). Applied on every boot by `pb_hooks/settings.pb.js`; the dashboard is for inspection. Upload limits are field options, so they change through a migration, not settings.
 - TLS termination, domain and the host itself are left to the platform.
+- **Test instance (ADR 0023):** the same image with `WWC_SEED=1`: the entrypoint runs `seed/seed.sh` in the background once `/api/health` answers, on every boot, since a disk-less host (Render free) starts from an empty `/pb_data`. The seed's tools (`bash`, `curl`, `jq`) are installed only when the build arg of the same name is set; Render passes env vars as build args. It needs `PB_SETTINGS_FILE=/pb_settings.dev.json` (rate limits off) and the superuser env vars kept set.
 
 ---
 
@@ -611,6 +612,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0020 — Forgot password: a Reset password panel reached from Login sends PocketBase's reset email; the link opens PocketBase's own page, like email confirmation; the panel never says whether an account exists; reset emails get their own rate limit.
 - 0021 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
 - 0022 — Audience measurement with Umami Cloud (free tier), only with consent: script loaded after "Accept", custom events from Rust, no personal data in events, off in builds without a website id.
+- 0023 — Test instances seed the dev data on every boot (`WWC_SEED=1`, background step in the entrypoint once PocketBase answers); the seed's tools are added to the image only by the build arg of the same name; rate limits off through `PB_SETTINGS_FILE`.
 
 ---
 
