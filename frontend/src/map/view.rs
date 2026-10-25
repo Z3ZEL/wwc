@@ -1,12 +1,15 @@
-//! The full-screen map: tiles (walkers + OpenStreetMap), campsite markers and clusters,
-//! the draft pin of the campsite form, the visitor's position ("Locate me"), and
-//! viewport → bbox reporting (ARCHITECTURE §5.5).
+//! The full-screen map: tiles (walkers + Mapbox, or OpenStreetMap without a token), campsite
+//! markers and clusters, the draft pin of the campsite form, the visitor's position
+//! ("Locate me"), and viewport → bbox reporting (ARCHITECTURE §5.5).
 //! The tile attribution is in the map footer (`ui::footer`), next to the legal links.
 
-use egui::{Align2, Button, FontId, Pos2, Rect, Response, RichText, Stroke, Ui, Vec2};
-use walkers::sources::OpenStreetMap;
-use walkers::{HttpTiles, Map, MapMemory, Position, Projector, lat_lon};
+use std::collections::HashMap;
 
+use egui::{Align2, Button, FontId, Pos2, Rect, Response, RichText, Stroke, Ui, Vec2};
+use walkers::sources::{Attribution, TileSource};
+use walkers::{HttpTiles, Map, MapMemory, Position, Projector, TileId, lat_lon};
+
+use super::basemap::{Basemap, Provider};
 use super::cluster::{cluster, cluster_radius};
 use crate::actions::Action;
 use crate::api::BBox;
@@ -19,7 +22,9 @@ const VIEWPORT_DEBOUNCE_SECS: f64 = 0.3;
 const HIT_SLOP: f32 = 4.0;
 
 pub struct MapView {
-    tiles: HttpTiles,
+    provider: Provider,
+    /// One tile cache per layer, made the first time the layer is shown: switching back is instant.
+    tiles: HashMap<Basemap, HttpTiles>,
     memory: MapMemory,
     home: Position,
     /// Last bbox sent to the controller, and a changed bbox waiting for the debounce.
@@ -28,13 +33,14 @@ pub struct MapView {
 }
 
 impl MapView {
-    pub fn new(ctx: &egui::Context, theme: &Theme) -> Self {
+    pub fn new(theme: &Theme) -> Self {
         let mut memory = MapMemory::default();
         if let Err(e) = memory.set_zoom(theme.map.default_zoom) {
             log::warn!("invalid default zoom: {e:?}");
         }
         Self {
-            tiles: HttpTiles::new(OpenStreetMap, ctx.clone()),
+            provider: Provider::configured(),
+            tiles: HashMap::new(),
             memory,
             home: lat_lon(theme.map.default_center.lat, theme.map.default_center.lon),
             reported: None,
@@ -58,9 +64,14 @@ impl MapView {
             }
         }
 
-        let map = Map::new(Some(&mut self.tiles), &mut self.memory, self.home)
-            .double_click_to_zoom(true)
-            .zoom_with_ctrl(false);
+        // Without a Mapbox token there is one layer, whatever the state says.
+        let basemap = if self.provider.has_layers() { state.basemap } else { Basemap::default() };
+        let provider = self.provider;
+        let tiles = self.tiles.entry(basemap).or_insert_with(|| {
+            let hidpi = ui.ctx().pixels_per_point() > 1.0;
+            HttpTiles::new(Layer { provider, basemap, hidpi }, ui.ctx().clone())
+        });
+        let map = Map::new(Some(tiles), &mut self.memory, self.home).double_click_to_zoom(true).zoom_with_ctrl(false);
         let (bbox, center, rect, zoom_into) = map
             .show(ui, |ui, response, projector, memory| {
                 draw_my_location(ui, response, projector, state, theme);
@@ -116,6 +127,29 @@ impl MapView {
                 ui.ctx().request_repaint_after_secs(VIEWPORT_DEBOUNCE_SECS as f32);
             }
         }
+    }
+}
+
+/// A layer's tiles for walkers. The URLs come from `basemap`, where they are tested.
+struct Layer {
+    provider: Provider,
+    basemap: Basemap,
+    /// More than one pixel per point when the layer was made: Mapbox's @2x tiles.
+    hidpi: bool,
+}
+
+impl TileSource for Layer {
+    fn tile_url(&self, tile: TileId) -> String {
+        self.provider.tile_url(self.basemap, tile.zoom, tile.x, tile.y, self.hidpi)
+    }
+
+    /// Not drawn by walkers: the map footer shows the attribution (`Provider::credits`).
+    fn attribution(&self) -> Attribution {
+        Attribution { text: "", url: "", logo_light: None, logo_dark: None }
+    }
+
+    fn tile_size(&self) -> u32 {
+        self.provider.tile_size()
     }
 }
 

@@ -16,7 +16,9 @@ use crate::map::MapView;
 use crate::seo::SeoTitles;
 use crate::state::{self, AppState};
 use crate::ui::theme::Theme;
-use crate::ui::{consent_panel, footer, locate_button, notice, panels, photo_viewer, top_bar, welcome_card, widgets};
+use crate::ui::{
+    consent_panel, footer, layer_button, locate_button, notice, panels, photo_viewer, top_bar, welcome_card, widgets,
+};
 
 /// Browser storage keys (localStorage), all listed in the Privacy Policy. `wwc_consent` is
 /// only used while consent is enabled (§5.12).
@@ -69,7 +71,7 @@ impl WwcApp {
                 .filter(|r| consent::config().is_current(r, crate::web::now_ms())),
             ..Default::default()
         };
-        let map = MapView::new(&cc.egui_ctx, &theme);
+        let map = MapView::new(&theme);
 
         let mut app = Self {
             state,
@@ -133,7 +135,7 @@ impl eframe::App for WwcApp {
         let narrow = ui.ctx().content_rect().width() < theme.layout.narrow_breakpoint;
         let mut welcome = None;
         if !(narrow && state.panel.is_some()) {
-            let footer = footer::show(ui.ctx(), map_rect, theme, &mut actions);
+            let footer = footer::show(ui.ctx(), map_rect, state, theme, &mut actions);
             let above_footer = footer.map_or(map_rect, |f| map_rect.with_max_y(f.top()));
             // Once consent is enabled, its panel replaces the notice (which says there are no analytics).
             let card = if consent::config().enabled {
@@ -142,7 +144,9 @@ impl eframe::App for WwcApp {
                 notice::show(ui.ctx(), above_footer, state, theme, &mut actions)
             };
             welcome = welcome_card::show(ui.ctx(), above_footer, card, state, theme, &mut actions);
-            locate_button::show(ui.ctx(), above_footer, card, state, theme, &mut actions);
+            if let Some(locate) = locate_button::show(ui.ctx(), above_footer, card, state, theme, &mut actions) {
+                layer_button::show(ui.ctx(), above_footer, locate, state, theme, &mut actions);
+            }
         }
         // The zoom buttons follow the card one frame later: draw that frame now.
         if *card_rect != welcome {

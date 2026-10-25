@@ -35,6 +35,8 @@ services:
       # Same-origin API: the browser calls /api/*, Trunk forwards it to PocketBase.
       TRUNK_SERVE_PROXY_BACKEND: http://pocketbase:8090/api/
       TRUNK_SERVE_PROXY_REWRITE: /api/
+      # Optional Mapbox public token from .env (ADR 0024); unset = OpenStreetMap tiles.
+      WWC_MAPBOX_TOKEN: ${WWC_MAPBOX_TOKEN:-}
     ports:
       - "8080:8080"
     volumes:

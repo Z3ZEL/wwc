@@ -5,7 +5,9 @@
 
 ## Map data
 
-Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the Open Database License (ODbL). The map images are provided by the OpenStreetMap Foundation, under its [tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available under the Open Database License (ODbL).
+
+The map images, the outdoor map and the aerial imagery, are © [Mapbox](https://www.mapbox.com/about/maps), and the satellite imagery is © [Maxar](https://www.maxar.com/). Spotted a mistake on the map? [Improve this map](https://apps.mapbox.com/feedback/).
 
 ## Software
 

@@ -98,6 +98,7 @@ impl Controller {
                 }
             }
             Action::CheckLocationPermission => self.check_location_permission(),
+            Action::SetBasemap(basemap) => state.basemap = basemap,
 
             Action::Search => {
                 let query = clean_search(&state.search.query);
@@ -587,6 +588,7 @@ mod tests {
 
     use super::*;
     use crate::documents::TERMS;
+    use crate::map::Basemap;
 
     /// These tests only take paths that make no request.
     fn controller() -> Controller {
@@ -688,6 +690,18 @@ mod tests {
         assert_eq!(state.changelog, Remote::Loaded(vec![]));
         c.handle(&mut state, Action::WelcomeTab(WelcomeTab::Welcome));
         assert_eq!(state.welcome.tab, WelcomeTab::Welcome);
+    }
+
+    #[test]
+    fn the_layer_button_switches_the_map_background() {
+        let mut c = controller();
+        let mut state = AppState::default();
+        assert_eq!(state.basemap, Basemap::Outdoors);
+        c.handle(&mut state, Action::SetBasemap(Basemap::Aerial));
+        assert_eq!(state.basemap, Basemap::Aerial);
+        let back = state.basemap.other();
+        c.handle(&mut state, Action::SetBasemap(back));
+        assert_eq!(state.basemap, Basemap::Outdoors);
     }
 
     #[test]

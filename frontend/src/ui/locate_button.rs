@@ -17,6 +17,7 @@ const DOT: f32 = 0.45;
 
 /// `area`: the map above the footer. `avoid`: a card at the bottom of the map (the privacy
 /// notice or the consent panel) that the button goes above when they would overlap, as on phones.
+/// Returns the button's rect: the layer button goes above it.
 pub fn show(
     ctx: &egui::Context,
     area: Rect,
@@ -24,11 +25,11 @@ pub fn show(
     state: &AppState,
     theme: &Theme,
     actions: &mut Vec<Action>,
-) {
+) -> Option<Rect> {
     let size = theme.layout.map_button_size;
     let margin = theme.spacing.map_button_margin;
     if area.width() < size + 2.0 * margin || area.height() < size + 2.0 * margin {
-        return;
+        return None;
     }
     let right = area.right() - margin;
     let columns = Rangef::new(right - size, right);
@@ -37,7 +38,7 @@ pub fn show(
         None => area.bottom(),
     };
 
-    Area::new(Id::new("locate_button"))
+    let shown = Area::new(Id::new("locate_button"))
         .order(Order::Middle)
         .pivot(Align2::RIGHT_BOTTOM)
         .fixed_pos(Pos2::new(right, bottom - margin))
@@ -59,6 +60,7 @@ pub fn show(
                 crosshair(ui, response.rect, color, state.locate.found.is_some(), theme);
             }
         });
+    Some(shown.response.rect)
 }
 
 /// The usual "my location" icon: a ring with four ticks, plus a dot once a position is known.

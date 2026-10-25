@@ -3,7 +3,8 @@
   Values in double braces come from documents.json (vars). Bump "updated" there when you change this file:
   the app then shows its privacy notice again.
   Keep it true to the code: browser storage keys (frontend/src/app.rs), log retention
-  (backend/pb_settings.json), backups (PB_BACKUPS_MAX_KEEP), public API rules (docs/API.md).
+  (backend/pb_settings.json), backups (PB_BACKUPS_MAX_KEEP), public API rules (docs/API.md),
+  map images (frontend/src/map/basemap.rs: Mapbox when the build has WWC_MAPBOX_TOKEN).
 -->
 
 > **In short:** we only collect what the site needs to work: your email address and display name, what you post, and short-lived technical logs. Audience measurement only if you accept it, without cookies. No ads, no tracking across other sites, and we never sell data. What you post is public. You can ask for a copy of your data, or for its deletion, at any time.
@@ -20,7 +21,7 @@ The controller of your personal data is {{operator_name}}, {{operator_address}},
 
 _Legal basis:_ our legitimate interest in running a secure service (GDPR, article 6(1)(f)). _Kept:_ {{log_retention_days}} days on our server. Our hosting providers keep their own access logs, as described in their policies.
 
-**Map images.** The map background is loaded directly from the servers of the OpenStreetMap Foundation, which therefore receive your IP address and the address of the page, like any website you visit. The Foundation is an independent controller: see its [privacy policy](https://osmfoundation.org/wiki/Privacy_Policy).
+**Map images.** The map background, the outdoor map or the aerial imagery, is loaded directly from the servers of Mapbox, Inc. (United States), which therefore receive your IP address, the address of the page and which part of the map you look at, like any website you visit. Mapbox is an independent controller: it keeps IP addresses for 30 days, to provide the service and for billing and security, and it is certified under the EU–US Data Privacy Framework. See its [privacy policy](https://www.mapbox.com/legal/privacy).
 
 _Legal basis:_ our legitimate interest in showing a map (article 6(1)(f)).
 
@@ -75,11 +76,11 @@ The site runs on service providers that process data on our behalf and on our in
 - email delivery: {{email_provider}};
 - audience measurement, only if you accept it: {{analytics_provider}}.
 
-The OpenStreetMap Foundation receives the requests for map images as an independent controller (section 2). We may also disclose data when the law requires it, for example to a court or an authority.
+Mapbox receives the requests for map images as an independent controller (section 2). We may also disclose data when the law requires it, for example to a court or an authority.
 
 ## 4. Transfers outside the European Union
 
-Some of these providers may process data outside the European Economic Area: our website host and our audience measurement provider, for example, are based in the United States. Such transfers rely on an adequacy decision of the European Commission (such as the EU–US Data Privacy Framework, for certified companies) or on the Commission's standard contractual clauses. Write to us for more information or a copy of these safeguards.
+Some of these providers may process data outside the European Economic Area: our website host and our audience measurement provider, for example, are based in the United States, like Mapbox, which serves the map images. Such transfers rely on an adequacy decision of the European Commission (such as the EU–US Data Privacy Framework, for certified companies) or on the Commission's standard contractual clauses. Write to us for more information or a copy of these safeguards.
 
 ## 5. Browser storage, cookies and audience measurement
 

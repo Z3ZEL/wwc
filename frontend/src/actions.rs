@@ -6,6 +6,7 @@ use crate::api::models::{
     AuthResponse, Campsite, CampsiteMarker, CampsiteStats, Comment, ListResponse, Rating, Report, Tag, User,
 };
 use crate::api::{ApiError, BBox};
+use crate::map::Basemap;
 use crate::state::{LocateError, MyLocation, Panel, PhotoRef, PickedPhoto, WelcomeTab};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,6 +38,8 @@ pub enum Action {
     Locate,
     /// Page load: locate at once if the visitor already allowed it, without asking.
     CheckLocationPermission,
+    /// Layer button: show another map background (Mapbox builds only, ADR 0024).
+    SetBasemap(Basemap),
 
     /// Run the query typed in the top bar search field.
     Search,

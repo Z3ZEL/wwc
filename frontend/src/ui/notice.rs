@@ -8,12 +8,13 @@ use egui::{Align2, Area, Frame, Id, Order, Rect, RichText, Stroke, Vec2};
 
 use crate::actions::Action;
 use crate::documents::{self, PRIVACY};
+use crate::map::Provider;
 use crate::state::{AppState, Panel};
 use crate::ui::theme::{Theme, subheading};
 use crate::ui::widgets::{link_button, primary_button};
 
 const TEXT: &str = "No ads, no analytics, no tracking cookies. Your browser only keeps your login session \
-                    and this notice's state. Map images are loaded from OpenStreetMap's servers.";
+                    and this notice's state.";
 
 /// `area`: the part of the map the notice may cover (above the footer). Returns the notice's
 /// rect while it is shown.
@@ -51,7 +52,7 @@ pub fn show(
                 .show(ui, |ui| {
                     ui.set_width(width.max(0.0));
                     ui.label(RichText::new(title).text_style(subheading()));
-                    ui.label(TEXT);
+                    ui.label(format!("{TEXT} Map images are loaded from {}'s servers.", Provider::configured().name()));
                     ui.horizontal(|ui| {
                         if primary_button(ui, theme, "Got it", true).clicked() {
                             actions.push(Action::DismissNotice);
