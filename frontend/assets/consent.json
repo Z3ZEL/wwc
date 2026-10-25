@@ -1,12 +1,12 @@
 {
-  "enabled": false,
-  "version": "2026-09-30",
+  "enabled": true,
+  "version": "2026-10-11",
   "max_age_days": 180,
   "purposes": [
     {
       "id": "analytics",
       "title": "Audience measurement",
-      "description": "Counts visits and the pages opened, to understand how the site is used and improve it. No advertising, no tracking across other sites."
+      "description": "Counts visits and what is used on the site (campsites opened, searches, sign-ups…) with Umami, without cookies, to understand how the site is used and improve it. No advertising, no tracking across other sites."
     }
   ]
 }

@@ -82,14 +82,14 @@ wwc/
 │   ├── assets/seo.json        # ALL SEO text and settings — see §5.10
 │   ├── assets/seo/            # favicon.svg, og-image.svg/.png (social preview)
 │   ├── assets/documents/      # Markdown documents shown in the app (legal pages…) + documents.json — see §5.11
-│   ├── assets/consent.json    # Consent panel settings and purposes (disabled until analytics exist) — see §5.12
+│   ├── assets/consent.json    # Consent panel settings and purposes (analytics) — see §5.12
 │   ├── assets/updates.json    # Release notes settings (repo, how many, prereleases) for tools/changelog-gen — see §5.6
 │   ├── tests/fixtures/        # Recorded PocketBase JSON for DTO tests; releases.json (changelog-gen's output contract)
 │   └── src/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
 │       ├── lib.rs             # module tree; `app` and `map` are wasm-only
 │       ├── app.rs             # impl eframe::App — frame loop + session persistence
-│       ├── config.rs          # build-time config (WWC_API_URL, WWC_BUILD_ID)
+│       ├── config.rs          # build-time config (WWC_API_URL, WWC_BUILD_ID, WWC_UMAMI_*)
 │       ├── actions.rs         # Action (UI intent) + Event (API result) enums
 │       ├── controller.rs      # Action -> state change / API request
 │       ├── state/             # AppState, Panel, Remote, form drafts, pure `apply(event)` + tests
@@ -101,7 +101,7 @@ wwc/
 │       ├── changelog.rs       # releases.json → release notes for the welcome card's Updates tab (host-tested)
 │       ├── consent.rs         # consent.json + consent records: validity, expiry, `allows` (host-tested)
 │       ├── media/             # photo upload settings + lossless metadata stripping (host-tested)
-│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title, password keyboard, geolocation), wasm only
+│       ├── web/               # browser APIs egui lacks (photo picker + re-encoding, document title, password keyboard, geolocation, Umami script), wasm only
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
@@ -303,7 +303,7 @@ Rules:
 - **UI functions never call the API directly.** They read `AppState` and push `Action`s. The one exception: egui text inputs need `&mut String`, so panels get `&mut AppState` and may edit **form input buffers** (and small view toggles like "confirm delete"). Anything else goes through an `Action`.
 - **All API results come back as `Event`s** through a single `std::sync::mpsc` receiver drained at the start of every frame. `ehttp` callbacks send the event, then call `ctx.request_repaint()` (see `Controller::done`).
 - **Exception — images:** `egui::Image::new(url)` fetches campsite photos itself, through the `egui_extras` loaders installed in `app.rs`, the same way walkers fetches tiles. It's read-only and cached, and it never touches `AppState`. UI code only builds the URL with `api::photo_url` (ADR 0010).
-- **Browser APIs** that egui lacks (the file picker, geolocation) live in `web/` and are called by the controller only. Their results come back as `Event`s, like API results.
+- **Browser APIs** that egui lacks (the file picker, geolocation, the Umami script) live in `web/` and are called by the controller only. Their results come back as `Event`s, like API results.
 - **State mutation from events is pure**: `fn apply(state: &mut AppState, event: Event) -> Vec<Action>`. The returned follow-up actions (e.g. "log in" after signup, "refresh markers" after a save) are handled by the controller in the same frame. It is unit-tested on the host.
 - Remote data is modeled explicitly, e.g.:
   ```rust
@@ -318,7 +318,7 @@ See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confir
 The walkers tile cache and map memory are not in `AppState`; they live in `map::MapView`, owned by the app.
 
 - **Routing (not implemented yet — panel state is in memory only):** there is one page (the map). The "route" is the active side panel. Sync `panel` with the URL hash so links are shareable and back/forward work: `#/` (none), `#/login`, `#/register`, `#/profile`, `#/new`, `#/campsite/<id>`, `#/campsite/<id>/edit`, `#/moderation`. Read the hash on startup. Unknown hash → `#/`. An auth-only panel opened while logged out → login panel, then back to the requested panel after login.
-- **Persistence:** only two keys go to `localStorage`, through eframe's storage (`App::save`, saved every 2 s): `wwc_session` (the auth session) and `wwc_notice` (`notice_seen`). A third, `wwc_consent`, is only read and written once consent is enabled (§5.12). The token is refreshed on startup. Never persist passwords. Both keys are strictly necessary, which is why the app needs no consent banner (§5.11): **a new key must be justified the same way and added to the Privacy Policy**, and anything non-essential (analytics…) would need a consent mechanism first.
+- **Persistence:** only two keys go to `localStorage`, through eframe's storage (`App::save`, saved every 2 s): `wwc_session` (the auth session) and `wwc_notice` (`notice_seen`). A third, `wwc_consent`, is only read and written while consent is enabled, i.e. in builds with analytics (§5.12). The token is refreshed on startup. Never persist passwords. Both keys are strictly necessary, which is why the app needs no consent banner (§5.11): **a new key must be justified the same way and added to the Privacy Policy**, and anything non-essential (analytics…) would need a consent mechanism first.
 
 ### 5.4 API client (`api/`)
 
@@ -474,21 +474,22 @@ Long texts shown in the app are Markdown files in `frontend/assets/documents/`, 
 
 - **Map footer** (§5.6): Terms · Privacy · Legal notice · © OpenStreetMap contributors, whenever the map is visible.
 - **Sign-up:** a required checkbox "I am at least `min_age` years old and I accept the Terms of Use" (`RegisterForm::accepted_terms`, checked by `RegisterForm::validate`), and a line pointing to the Privacy Policy. The policy is information, not something to accept: the account's legal basis is the contract. **Browser-side only**: the backend doesn't record the acceptance yet (§13).
-- **Privacy notice** (`ui/notice.rs`): informative, **not a consent banner**. The app only stores strictly necessary data (§5.3 Persistence) and loads no trackers, so there is nothing to consent to. "Got it" stores the Privacy Policy's `updated` date in `notice_seen` (`wwc_notice`); when that date changes, the notice comes back as "Our Privacy Policy changed on …". Analytics or any other non-essential storage need consent first: the consent panel is ready for that (§5.12) and replaces the notice once enabled.
+- **Privacy notice** (`ui/notice.rs`): informative, **not a consent banner**. Shown only in builds without analytics (no Umami website id, §5.12): they store only strictly necessary data (§5.3 Persistence) and load no trackers, so there is nothing to consent to. "Got it" stores the Privacy Policy's `updated` date in `notice_seen` (`wwc_notice`); when that date changes, the notice comes back as "Our Privacy Policy changed on …". Builds with analytics show the consent panel instead (§5.12).
 - **Profile → "Your data"** points to the Privacy Policy: export and deletion are requested by email until they are self-service.
 - **Campsite form:** "The exact location is public" (§6).
 - **Keep the texts true to the code.** The Privacy Policy states the browser storage keys (`app.rs`), log retention (`backend/pb_settings.json` `logs.maxDays` = var `log_retention_days`, checked by a test), backups (`PB_BACKUPS_MAX_KEEP` = var `backup_retention_days`), what the API makes public (`docs/API.md`: profiles, individual ratings, photo files, stripped of their metadata since ADR 0017) and the providers. A change to any of these updates the policy, and its `updated` date, in the same change.
 
-### 5.12 Consent (`frontend/assets/consent.json`), disabled for now
+### 5.12 Consent and analytics (`frontend/assets/consent.json`, ADR 0022)
 
-A consent panel for optional processing (analytics and any other non-essential storage or tracking: ePrivacy art. 5(3), GDPR art. 7) is built and tested but **off** (`"enabled": false`) until the first analytics are added. While it is off, nothing changes: no panel, no footer link, no `wwc_consent` key, and `AppState::consent_allows` is always false.
+A consent panel for optional processing (analytics and any other non-essential storage or tracking: ePrivacy art. 5(3), GDPR art. 7). Its only purpose is `analytics`: audience measurement with Umami Cloud. Consent is on only when `consent.json` says `"enabled": true` **and** the build has an Umami website id (`WWC_UMAMI_WEBSITE_ID`, `ConsentConfig::needing`). Otherwise (dev builds, forks) nothing changes: no panel, no footer link, no `wwc_consent` key, `AppState::consent_allows` is always false, and the privacy notice is shown instead.
 
 - **Config** (`consent.json`, compiled in, `src/consent.rs`): `enabled`, `version`, `max_age_days` (180: choices are asked again after 6 months, CNIL guidance; tests cap it at 13 months) and `purposes` (`id`, `title`, `description`), each off until the visitor accepts it.
 - **Panel** (`ui/consent_panel.rs`): floats at the bottom-center of the map, above the footer, in place of the privacy notice (whose text says there are no analytics). "Accept all" and "Reject all" look the same and sit side by side; "Customize" shows one unticked checkbox per purpose and "Save my choices"; plus a Privacy Policy link. It doesn't block the map: until the visitor chooses, nothing is allowed. It hides with the footer when a panel covers the map on narrow screens.
 - **Choice** (`ConsentRecord`: `version`, `decided_at_ms`, `granted` purposes): `Action::SaveConsent(AcceptAll | RejectAll | Selected)`, saved as `wwc_consent`. At startup a record for another `version`, or older than `max_age_days`, is dropped, so the panel shows again.
 - **Withdrawal:** "Privacy choices" in the map footer (`Action::OpenConsent`) reopens the panel with the current choice ticked and a × to close without changes. Withdrawing is as easy as accepting.
 - **Using it:** code that needs consent checks `state.consent_allows("analytics")` before loading or sending anything, and stops when it becomes false.
-- **To enable, in the same change as the analytics:** set `"enabled": true`; describe the analytics in `privacy.md` (a commented draft is in its section 5: provider, data, retention, the `wwc_consent` key) and bump its `updated` date; gate the analytics on `consent_allows`; and bump `version` whenever the purposes change, so everyone is asked again.
+- **Analytics** (`src/analytics.rs`, host-tested; `web/analytics.rs`): `app.rs` syncs `Analytics` with `consent_allows("analytics")` at startup and after the actions of every frame. On accept, `web::analytics::start` adds Umami's script (`WWC_UMAMI_SCRIPT_URL`, default `cloud.umami.is`) with automatic tracking off, Do Not Track respected, and no search or hash in URLs; it counts a pageview once loaded. On withdrawal the app stops calling it, without a reload. Events are mapped from the visitor's own `Action`s (`for_action`: `campsite-open`, `search`, `filter`, `locate`; follow-ups emitted by `state::apply` don't count) and from successful `Event`s (`for_event`: `signup`, `campsite-create`, `photos-add`, `rating`, `comment`, `report`). **No personal data in events:** no ids, search text, emails or positions.
+- **Changing the purposes or the events:** describe them in `privacy.md` (section 5) and bump its `updated` date; bump `version` in `consent.json` whenever the purposes change, so everyone is asked again.
 - **Limit:** the proof of consent stays in the visitor's browser (GDPR art. 7(1) asks to be able to demonstrate it). Enough for basic analytics; log choices on the server if the processing becomes riskier.
 
 ---
@@ -501,7 +502,7 @@ A consent panel for optional processing (analytics and any other non-essential s
 | **Security**    | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way).                                                                                                                              |
 | **Privacy**     | Never expose user emails publicly. Campsite coordinates are public by design, as the campsite form says. What is collected, public and stored is described in the Privacy Policy: keep it in sync (§5.11).                                                                                                                                    |
 | **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`.                                                                                                                           |
-| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default) and `WWC_BUILD_ID` (cache key of `releases.json`; `scripts/build-frontend.sh` sets the build time, `dev` when unset). Build only: `GITHUB_TOKEN` (optional, read-only) and `WWC_CHANGELOG` for `tools/changelog-gen`. Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
+| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default) and `WWC_BUILD_ID` (cache key of `releases.json`; `scripts/build-frontend.sh` sets the build time, `dev` when unset), `WWC_UMAMI_WEBSITE_ID` (optional: analytics and the consent panel, §5.12) and `WWC_UMAMI_SCRIPT_URL` (optional). Build only: `GITHUB_TOKEN` (optional, read-only) and `WWC_CHANGELOG` for `tools/changelog-gen`. Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
 | **Time**        | Store UTC (PocketBase does); format in local time in the UI.                                                                                                                                                                                                                                                                                  |
 
 ---
@@ -609,6 +610,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0019 — "Locate me" button at the bottom-right of the map: one browser position per click (permission asked on click only, automatic on load once already granted), kept in memory to center the map and draw a "you are here" dot, never sent or saved.
 - 0020 — Forgot password: a Reset password panel reached from Login sends PocketBase's reset email; the link opens PocketBase's own page, like email confirmation; the panel never says whether an account exists; reset emails get their own rate limit.
 - 0021 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
+- 0022 — Audience measurement with Umami Cloud (free tier), only with consent: script loaded after "Accept", custom events from Rust, no personal data in events, off in builds without a website id.
 
 ---
 
@@ -633,7 +635,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Email verification (required to post) with mailpit in dev, and a production setup: static frontend build, PocketBase image, S3 files and backups, SMTP (ADR 0012).
 - Backend image (amd64 + arm64) published to GHCR on each GitHub Release (ADR 0013); full releases also deploy the frontend on Render (ADR 0015).
 - Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
-- Consent panel for analytics (§5.12), built and tested but disabled until analytics are added.
+- Audience measurement with Umami Cloud behind the consent panel (§5.12, ADR 0022), in builds with `WWC_UMAMI_WEBSITE_ID`.
 - "Locate me" button: centers the map on the visitor and shows their position (§5.5, ADR 0019).
 - "Forgot password?" on the Login panel: a reset link by email, then PocketBase's own page sets the new password (§4.6, ADR 0020).
 - Welcome card at the top-left of the map: a welcome text and the latest release notes, synced from GitHub Releases at build time (§5.6, ADR 0021).

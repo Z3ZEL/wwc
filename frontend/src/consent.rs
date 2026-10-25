@@ -1,16 +1,14 @@
 //! Consent to optional processing (analytics…), ePrivacy art. 5(3) and GDPR art. 7
 //! (ARCHITECTURE §5.12). Configured by `assets/consent.json`, compiled in.
 //!
-//! **Off for now** (`"enabled": false`): nothing needs consent yet. While it is off, the consent
-//! panel never shows, nothing is stored, and `AppState::consent_allows` is always false. The
-//! privacy notice (`ui/notice.rs`) is shown instead.
+//! The only purpose is Umami analytics (`crate::analytics`, ADR 0022). A build without an Umami
+//! website id has nothing to ask about: consent is then off, as if `"enabled": false`. While it
+//! is off, the consent panel never shows, nothing is stored, and `AppState::consent_allows` is
+//! always false. The privacy notice (`ui/notice.rs`) is shown instead.
 //!
-//! Before setting `"enabled": true`, together with the analytics code:
-//! - describe the analytics in `assets/documents/privacy.md` (purpose, provider, data, retention,
-//!   what it stores in the browser, and the `wwc_consent` key), and bump its `updated` date;
-//! - load or call the analytics only when `state.consent_allows("analytics")` is true, and stop
-//!   when it turns false (the choice can be changed at any time from the map footer);
-//! - bump `version` here whenever the purposes change, so everyone is asked again.
+//! When the purposes change: describe them in `assets/documents/privacy.md` and bump its
+//! `updated` date, gate the code on `state.consent_allows(<id>)` (and stop when it turns false),
+//! and bump `version` here so everyone is asked again.
 
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
@@ -45,12 +43,14 @@ pub struct Purpose {
 }
 
 static CONFIG: LazyLock<ConsentConfig> = LazyLock::new(|| {
-    ConsentConfig::parse(CONSENT_JSON).unwrap_or_else(|e| {
-        // The unit tests parse the real file, so this only happens if they were skipped.
-        // Default = disabled: nothing is ever allowed.
-        log::error!("assets/consent.json: {e}");
-        ConsentConfig::default()
-    })
+    ConsentConfig::parse(CONSENT_JSON)
+        .unwrap_or_else(|e| {
+            // The unit tests parse the real file, so this only happens if they were skipped.
+            // Default = disabled: nothing is ever allowed.
+            log::error!("assets/consent.json: {e}");
+            ConsentConfig::default()
+        })
+        .needing(crate::config::umami_website_id().is_some())
 });
 
 /// The compiled-in configuration.
@@ -61,6 +61,12 @@ pub fn config() -> &'static ConsentConfig {
 impl ConsentConfig {
     pub fn parse(json: &str) -> Result<Self, String> {
         serde_json::from_str(json).map_err(|e| e.to_string())
+    }
+
+    /// Consent stays off when the build has nothing that needs it (no analytics configured).
+    pub fn needing(mut self, analytics: bool) -> Self {
+        self.enabled &= analytics;
+        self
     }
 
     pub fn purpose_ids(&self) -> BTreeSet<String> {
@@ -165,5 +171,15 @@ mod tests {
         assert!(!config(false).allows(Some(&accepted), "analytics"));
         let newer = ConsentConfig { version: "v3".into(), ..config(true) };
         assert!(!newer.allows(Some(&accepted), "analytics"));
+    }
+
+    #[test]
+    fn consent_is_off_without_analytics() {
+        assert!(config(true).needing(true).enabled);
+        assert!(!config(true).needing(false).enabled, "no Umami website id in this build");
+        assert!(!config(false).needing(true).enabled);
+        let c = ConsentConfig::parse(CONSENT_JSON).expect("consent.json parses");
+        assert!(c.enabled, "analytics are added: consent.json enables the panel");
+        assert!(c.purpose_ids().contains(crate::analytics::PURPOSE));
     }
 }

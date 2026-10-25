@@ -10,6 +10,8 @@
     "backend_host": "Private server hosted in Switzerland",
     "storage_provider": "AWS S3 (https://aws.amazon.com/s3/)",
     "email_provider": "OVH (https://www.ovh.com)",
+    "analytics_provider": "Umami Software, Inc., USA (Umami Cloud, https://umami.is)",
+    "analytics_retention": "6 months",
     "min_age": "16",
     "log_retention_days": "14",
     "backup_retention_days": "7"
@@ -28,7 +30,7 @@
       "title": "Privacy Policy",
       "short_title": "Privacy",
       "file": "privacy.md",
-      "updated": "2026-10-01",
+      "updated": "2026-10-11",
       "footer": true
     },
     {
