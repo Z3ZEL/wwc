@@ -15,22 +15,22 @@ free tier sized for a small site.
   page, where anyone can read it, so a secret token (`sk.…`) is refused and the build falls back to OSM.
   The token should be URL-restricted to the site in the Mapbox dashboard.
 - **Without a token** (dev, forks, CI), nothing changes: OSM tiles, OSM attribution, no layer button.
-- **Two layers:** Outdoors (`outdoors-v12`) by default, and Aerial (`satellite-streets-v12`: imagery with
-  roads and place names, to find your way on it). `map/basemap.rs` holds the provider, the layers, the tile
-  URLs and the attribution as pure, host-tested code; `map/view.rs` gives walkers one `HttpTiles` cache per
-  layer, made the first time the layer is shown, so switching back is instant. Tiles are 512 px (a quarter
-  of the requests of 256 px tiles), @2x on screens with more than one pixel per point.
-- **A layer button right above "Locate me"** (`ui/layer_button.rs`), same size and style. One click switches
-  to the other layer (`Action::SetBasemap`). With two layers a toggle is one tap, where a menu would be two.
-  Its icon is the usual stack of sheets, the top one filled while Aerial is shown; the hover text says what
-  a click shows. The choice is kept in memory only (`AppState::basemap`): every visit opens on Outdoors, and
-  there is no new browser storage key to justify (§5.3).
+- **Two layers, with walkers' own `Mapbox` source:** Outdoors by default, and Aerial (`SatelliteStreets`:
+  imagery with roads and place names, to find your way on it). `map/view.rs` keeps one `HttpTiles` per
+  layer, so switching back is instant. Tiles are 512 px (a quarter of the requests of 256 px tiles), @2x on
+  screens with more than one pixel per point.
+- **A layer button right above "Locate me"**, drawn in the same `Area` (`ui/locate_button.rs`), so it
+  follows it above the privacy notice on phones. Same size. One click switches to the other layer
+  (`Action::ToggleAerial`): with two layers a toggle is one tap, where a menu would be two. Its icon is the
+  layer a click shows (🗺 / 🌍, both in egui's bundled fonts), and the hover text says it too. The choice
+  is kept in memory only (`AppState::aerial`): every visit opens on Outdoors, and there is no new browser
+  storage key to justify (§5.3).
 - **Attribution, as Mapbox requires** (docs.mapbox.com/help/dive-deeper/attribution): the Mapbox wordmark
   (unstyled, the black version on the footer's light background), "© Mapbox", "© OpenStreetMap",
   "© Maxar" on the aerial layer, and "Improve this map", each linking to Mapbox's pages. They live in the
   map footer with the legal links, so the bottom-right corner holds everything and no new card has to avoid
-  the privacy notice on phones. The wordmark is an SVG drawn by egui_extras' SVG loader, which walkers already
-  enables.
+  the privacy notice on phones. The wordmark SVG comes from walkers' assets and is drawn by egui_extras'
+  SVG loader, which walkers already enables.
 - **Legal texts:** the Privacy Policy names Mapbox, Inc. (United States) as the independent controller that
   receives map image requests (IP address kept 30 days, EU–US Data Privacy Framework), and the Credits page
   credits Mapbox and Maxar. The privacy notice names the provider the build actually uses.
@@ -39,7 +39,7 @@ free tier sized for a small site.
   - Mapbox GL JS or vector tiles: a JavaScript map next to the egui canvas, or a vector renderer in wasm, for
     the same pictures.
   - Other providers (MapTiler, Thunderforest, Esri, IGN): workable, but Mapbox covers both layers with one
-    account and walkers ships a Mapbox source we could follow.
+    account and walkers already ships a source for it.
   - A token fetched at runtime from PocketBase: a public token is public anyway, and one build per
     environment already exists for `WWC_API_URL`.
   - Remembering the layer between visits: a new storage key in the policy for a one-tap choice.

@@ -1,34 +1,29 @@
 //! Strip at the bottom-right of the map: links to the legal documents, "Privacy choices"
-//! while consent is enabled, and the attribution the map's tiles require: OpenStreetMap's, or
-//! Mapbox's wordmark and links (ARCHITECTURE §5.6, ADR 0024).
+//! while consent is enabled, and the attribution the map tiles require: OpenStreetMap's, or
+//! Mapbox's (ARCHITECTURE §5.6, ADR 0024).
 
-use egui::{Align2, Area, Frame, Hyperlink, Id, Image, Link, Margin, Order, Rect, RichText, Vec2};
+use egui::{Align2, Area, Frame, Hyperlink, Id, Image, Link, Margin, Order, Rect, RichText, TextStyle, Vec2};
 
 use crate::actions::Action;
-use crate::map::Provider;
-use crate::state::{AppState, Panel};
+use crate::state::Panel;
 use crate::ui::theme::Theme;
-use crate::{consent, documents};
+use crate::{config, consent, documents};
 
-/// Width / height of the wordmark (its SVG view box).
-const MAPBOX_LOGO_RATIO: f32 = 800.0 / 180.0;
+const OSM_COPYRIGHT: &str = "https://www.openstreetmap.org/copyright";
 
 /// Draws over the map rect and returns the strip's rect. The app doesn't call it while a
 /// panel covers the map (narrow screens).
-pub fn show(
-    ctx: &egui::Context,
-    map: Rect,
-    state: &AppState,
-    theme: &Theme,
-    actions: &mut Vec<Action>,
-) -> Option<Rect> {
+/// `aerial`: the aerial imagery is shown (Mapbox builds).
+pub fn show(ctx: &egui::Context, map: Rect, aerial: bool, theme: &Theme, actions: &mut Vec<Action>) -> Option<Rect> {
     if map.width() < 1.0 || map.height() < 1.0 {
         return None;
     }
     let c = &theme.map.colors;
     let [px, py] = theme.spacing.map_footer_padding;
     let small = |text: &str| RichText::new(text).small().color(c.attribution_text);
-    let provider = Provider::configured();
+    let link = |ui: &mut egui::Ui, text: &str, url: &str| {
+        ui.add(Hyperlink::from_label_and_url(small(text), url).open_in_new_tab(true));
+    };
     let area = Area::new(Id::new("map_footer"))
         .order(Order::Middle)
         .pivot(Align2::RIGHT_BOTTOM)
@@ -39,12 +34,6 @@ pub fn show(
                 ui.set_max_width(map.width() - 2.0 * px);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(px, 0.0);
-                    if provider.has_wordmark() {
-                        let height = theme.map.mapbox_logo_height;
-                        let logo = Image::new(egui::include_image!("../../assets/map/mapbox-logo.svg"))
-                            .fit_to_exact_size(Vec2::new(height * MAPBOX_LOGO_RATIO, height));
-                        ui.add(logo).on_hover_text("Map by Mapbox");
-                    }
                     for doc in documents::manifest().footer() {
                         if ui.add(Link::new(small(doc.short_title()))).on_hover_text(&doc.title).clicked() {
                             actions.push(Action::OpenPanel(Panel::Document(doc.id.clone())));
@@ -59,9 +48,20 @@ pub fn show(
                         }
                         ui.label(small("·"));
                     }
-                    for credit in provider.credits(state.basemap) {
-                        ui.add(Hyperlink::from_label_and_url(small(credit.text), credit.url).open_in_new_tab(true));
+                    if config::mapbox_token().is_none() {
+                        link(ui, "© OpenStreetMap contributors", OSM_COPYRIGHT);
+                        return;
                     }
+                    // What Mapbox requires: its wordmark and these links, plus Maxar for the imagery.
+                    let logo = Image::new(egui::include_image!("../../assets/map/mapbox-logo.svg"));
+                    let height = ui.text_style_height(&TextStyle::Body);
+                    ui.add(logo.fit_to_exact_size(Vec2::new(height * 800.0 / 180.0, height))); // SVG view box
+                    link(ui, "© Mapbox", "https://www.mapbox.com/about/maps");
+                    link(ui, "© OpenStreetMap", OSM_COPYRIGHT);
+                    if aerial {
+                        link(ui, "© Maxar", "https://www.maxar.com/");
+                    }
+                    link(ui, "Improve this map", "https://apps.mapbox.com/feedback/");
                 });
             });
         });

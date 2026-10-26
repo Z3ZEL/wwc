@@ -21,7 +21,6 @@ use crate::api::{ApiError, BBox, CampsiteFilter};
 use crate::changelog::Release;
 use crate::consent::{self, ConsentRecord};
 use crate::documents::Block;
-use crate::map::Basemap;
 
 /// The side panel shown over the map (ARCHITECTURE §5.6).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,8 +224,8 @@ pub struct AppState {
     pub map_focus: Option<(f64, f64)>,
     /// The visitor's position from the "Locate me" button (memory only, never saved).
     pub locate: Locate,
-    /// The map layer picked with the layer button (memory only, ADR 0024).
-    pub basemap: Basemap,
+    /// Mapbox builds: aerial imagery instead of the outdoor map (layer button, memory only).
+    pub aerial: bool,
 
     pub detail: Option<CampsiteDetail>,
 

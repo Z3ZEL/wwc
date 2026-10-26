@@ -1,10 +1,12 @@
 //! "Locate me" button at the bottom-right of the map, above the footer: centers the map on the
 //! visitor and shows where they are (ARCHITECTURE §5.5, ADR 0019). The controller asks the
-//! browser for the position; this only draws the button.
+//! browser for the position; this only draws the button. Mapbox builds also get the layer
+//! button right above it (ADR 0024).
 
-use egui::{Align2, Area, Button, Color32, Id, Order, Pos2, Rangef, Rect, Stroke, Ui, Vec2};
+use egui::{Align2, Area, Button, Color32, Id, Order, Pos2, Rangef, Rect, RichText, Stroke, TextStyle, Ui, Vec2};
 
 use crate::actions::Action;
+use crate::config;
 use crate::state::AppState;
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{Spinner, SpinnerSize};
@@ -17,7 +19,6 @@ const DOT: f32 = 0.45;
 
 /// `area`: the map above the footer. `avoid`: a card at the bottom of the map (the privacy
 /// notice or the consent panel) that the button goes above when they would overlap, as on phones.
-/// Returns the button's rect: the layer button goes above it.
 pub fn show(
     ctx: &egui::Context,
     area: Rect,
@@ -25,11 +26,11 @@ pub fn show(
     state: &AppState,
     theme: &Theme,
     actions: &mut Vec<Action>,
-) -> Option<Rect> {
+) {
     let size = theme.layout.map_button_size;
     let margin = theme.spacing.map_button_margin;
     if area.width() < size + 2.0 * margin || area.height() < size + 2.0 * margin {
-        return None;
+        return;
     }
     let right = area.right() - margin;
     let columns = Rangef::new(right - size, right);
@@ -38,12 +39,21 @@ pub fn show(
         None => area.bottom(),
     };
 
-    let shown = Area::new(Id::new("locate_button"))
+    Area::new(Id::new("locate_button"))
         .order(Order::Middle)
         .pivot(Align2::RIGHT_BOTTOM)
         .fixed_pos(Pos2::new(right, bottom - margin))
         .constrain_to(area)
         .show(ctx, |ui| {
+            // The icon is the layer a click shows.
+            if config::mapbox_token().is_some() {
+                let (icon, hint) =
+                    if state.aerial { ("🗺", "Show the outdoor map") } else { ("🌍", "Show aerial imagery") };
+                let layer = Button::new(RichText::new(icon).text_style(TextStyle::Heading)).min_size(Vec2::splat(size));
+                if ui.add(layer).on_hover_text(hint).clicked() {
+                    actions.push(Action::ToggleAerial);
+                }
+            }
             let pending = state.locate.pending;
             let response = ui
                 .add_enabled(!pending, Button::new("").min_size(Vec2::splat(size)))
@@ -60,7 +70,6 @@ pub fn show(
                 crosshair(ui, response.rect, color, state.locate.found.is_some(), theme);
             }
         });
-    Some(shown.response.rect)
 }
 
 /// The usual "my location" icon: a ring with four ticks, plus a dot once a position is known.

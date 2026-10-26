@@ -144,7 +144,6 @@
     "my_location_radius": 7.0,
     "zoom_button_size": 28.0,
     "zoom_button_gap": 4.0,
-    "mapbox_logo_height": 18.0,
     "colors": {
       "marker": "#E07A2F",
       "marker_own": "#2F7D4F",

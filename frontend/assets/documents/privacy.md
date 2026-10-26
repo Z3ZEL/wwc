@@ -4,7 +4,7 @@
   the app then shows its privacy notice again.
   Keep it true to the code: browser storage keys (frontend/src/app.rs), log retention
   (backend/pb_settings.json), backups (PB_BACKUPS_MAX_KEEP), public API rules (docs/API.md),
-  map images (frontend/src/map/basemap.rs: Mapbox when the build has WWC_MAPBOX_TOKEN).
+  map images (frontend/src/map/view.rs: Mapbox when the build has WWC_MAPBOX_TOKEN).
 -->
 
 > **In short:** we only collect what the site needs to work: your email address and display name, what you post, and short-lived technical logs. Audience measurement only if you accept it, without cookies. No ads, no tracking across other sites, and we never sell data. What you post is public. You can ask for a copy of your data, or for its deletion, at any time.

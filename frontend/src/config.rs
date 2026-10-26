@@ -28,10 +28,16 @@ pub fn umami_script_url() -> &'static str {
     }
 }
 
-/// Mapbox public access token from `WWC_MAPBOX_TOKEN` (ADR 0024). The map then uses Mapbox's
-/// Outdoors and Aerial layers; `None` (unset or not a public token) keeps OpenStreetMap's tiles.
+/// Mapbox public token from `WWC_MAPBOX_TOKEN` (ADR 0024): Mapbox tiles and the layer button.
+/// `None` (unset or not a public token) keeps OpenStreetMap's tiles.
 pub fn mapbox_token() -> Option<&'static str> {
-    public_token_or_none(option_env!("WWC_MAPBOX_TOKEN"))
+    public_token(option_env!("WWC_MAPBOX_TOKEN"))
+}
+
+/// Only `pk.…`: the wasm shows the token to anyone, so a secret `sk.…` one is refused. It goes
+/// into tile URLs too: `url_safe_or_dev` answers `dev` for anything else.
+fn public_token(token: Option<&str>) -> Option<&str> {
+    Some(url_safe_or_dev(token)).filter(|t| t.len() > 3 && t.starts_with("pk."))
 }
 
 fn trim_base(url: &str) -> &str {
@@ -53,17 +59,6 @@ fn uuid_or_none(id: Option<&str>) -> Option<&str> {
                 8 | 13 | 18 | 23 => c == '-',
                 _ => c.is_ascii_hexdigit(),
             })
-    })
-}
-
-/// A Mapbox public token (`pk.…`), or `None`. The token is baked into the wasm, where anyone can
-/// read it: a secret token (`sk.…`) is refused. It goes into tile URLs, so only letters, digits,
-/// `.`, `_` and `-` are accepted.
-fn public_token_or_none(token: Option<&str>) -> Option<&str> {
-    token.map(str::trim).filter(|t| {
-        t.len() > "pk.".len()
-            && t.starts_with("pk.")
-            && t.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
     })
 }
 
@@ -106,14 +101,9 @@ mod tests {
 
     #[test]
     fn mapbox_tokens_are_public() {
-        let token = "pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJjbGV4YW1wbGUifQ.abc-DEF_123";
-        assert_eq!(public_token_or_none(Some(token)), Some(token));
-        assert_eq!(public_token_or_none(Some(&format!(" {token}\n"))), Some(token));
-        assert_eq!(public_token_or_none(None), None);
-        assert_eq!(public_token_or_none(Some("")), None);
-        assert_eq!(public_token_or_none(Some("pk.")), None);
-        assert_eq!(public_token_or_none(Some("sk.eyJ1IjoiZXhhbXBsZSJ9.secret")), None, "secret tokens stay out");
-        assert_eq!(public_token_or_none(Some("pk.abc&style=x")), None);
-        assert_eq!(public_token_or_none(Some("pk.abc def")), None);
+        assert_eq!(public_token(Some(" pk.eyJ1Ijoi.x-Y_z ")), Some("pk.eyJ1Ijoi.x-Y_z"));
+        for refused in [None, Some(""), Some("pk."), Some("sk.eyJ1Ijoi.secret"), Some("pk.a&b=c")] {
+            assert_eq!(public_token(refused), None, "{refused:?}");
+        }
     }
 }

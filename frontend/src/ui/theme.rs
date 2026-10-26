@@ -229,8 +229,6 @@ pub struct MapTheme {
     /// The +/− buttons, right of the welcome card: side, and the gap between them.
     pub zoom_button_size: f32,
     pub zoom_button_gap: f32,
-    /// Height of the Mapbox wordmark in the map footer (Mapbox builds).
-    pub mapbox_logo_height: f32,
     pub colors: MapColors,
 }
 
@@ -411,7 +409,6 @@ mod tests {
         assert!(t.layout.map_button_size >= t.layout.icon_button_size, "the locate button is a touch target");
         assert!(t.map.my_location_radius > 0.0);
         assert!(t.map.zoom_button_size > 0.0 && t.map.zoom_button_gap >= 0.0);
-        assert!(t.map.mapbox_logo_height >= t.typography.size_small, "Mapbox's wordmark must be legible");
         assert!(
             t.layout.welcome_height_ratio > 0.0 && t.layout.welcome_height_ratio <= 1.0,
             "the welcome card fits in the map"
