@@ -1,15 +1,16 @@
-//! The full-screen map: tiles (walkers + OpenStreetMap), campsite markers and clusters,
-//! the draft pin of the campsite form, the visitor's position ("Locate me"), and
-//! viewport → bbox reporting (ARCHITECTURE §5.5).
+//! The full-screen map: tiles (walkers + Mapbox, or OpenStreetMap without a token), campsite
+//! markers and clusters, the draft pin of the campsite form, the visitor's position
+//! ("Locate me"), and viewport → bbox reporting (ARCHITECTURE §5.5).
 //! The tile attribution is in the map footer (`ui::footer`), next to the legal links.
 
 use egui::{Align2, Button, FontId, Pos2, Rect, Response, RichText, Stroke, Ui, Vec2};
-use walkers::sources::OpenStreetMap;
+use walkers::sources::{Mapbox, MapboxStyle, OpenStreetMap};
 use walkers::{HttpTiles, Map, MapMemory, Position, Projector, lat_lon};
 
 use super::cluster::{cluster, cluster_radius};
 use crate::actions::Action;
 use crate::api::BBox;
+use crate::config;
 use crate::state::AppState;
 use crate::ui::theme::Theme;
 
@@ -20,6 +21,8 @@ const HIT_SLOP: f32 = 4.0;
 
 pub struct MapView {
     tiles: HttpTiles,
+    /// Mapbox builds: the aerial imagery, shown while `AppState::aerial` is set.
+    aerial: Option<HttpTiles>,
     memory: MapMemory,
     home: Position,
     /// Last bbox sent to the controller, and a changed bbox waiting for the debounce.
@@ -33,8 +36,16 @@ impl MapView {
         if let Err(e) = memory.set_zoom(theme.map.default_zoom) {
             log::warn!("invalid default zoom: {e:?}");
         }
+        // Mapbox when the build has a token (ADR 0024), with @2x tiles on high-density screens.
+        let mapbox = |style, token: &str| {
+            let high_resolution = ctx.pixels_per_point() > 1.0;
+            HttpTiles::new(Mapbox { style, high_resolution, access_token: token.to_owned() }, ctx.clone())
+        };
+        let token = config::mapbox_token();
         Self {
-            tiles: HttpTiles::new(OpenStreetMap, ctx.clone()),
+            tiles: token
+                .map_or_else(|| HttpTiles::new(OpenStreetMap, ctx.clone()), |t| mapbox(MapboxStyle::Outdoors, t)),
+            aerial: token.map(|t| mapbox(MapboxStyle::SatelliteStreets, t)),
             memory,
             home: lat_lon(theme.map.default_center.lat, theme.map.default_center.lon),
             reported: None,
@@ -58,9 +69,11 @@ impl MapView {
             }
         }
 
-        let map = Map::new(Some(&mut self.tiles), &mut self.memory, self.home)
-            .double_click_to_zoom(true)
-            .zoom_with_ctrl(false);
+        let tiles = match &mut self.aerial {
+            Some(aerial) if state.aerial => aerial,
+            _ => &mut self.tiles,
+        };
+        let map = Map::new(Some(tiles), &mut self.memory, self.home).double_click_to_zoom(true).zoom_with_ctrl(false);
         let (bbox, center, rect, zoom_into) = map
             .show(ui, |ui, response, projector, memory| {
                 draw_my_location(ui, response, projector, state, theme);

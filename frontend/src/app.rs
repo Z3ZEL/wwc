@@ -133,7 +133,7 @@ impl eframe::App for WwcApp {
         let narrow = ui.ctx().content_rect().width() < theme.layout.narrow_breakpoint;
         let mut welcome = None;
         if !(narrow && state.panel.is_some()) {
-            let footer = footer::show(ui.ctx(), map_rect, theme, &mut actions);
+            let footer = footer::show(ui.ctx(), map_rect, state.aerial, theme, &mut actions);
             let above_footer = footer.map_or(map_rect, |f| map_rect.with_max_y(f.top()));
             // Once consent is enabled, its panel replaces the notice (which says there are no analytics).
             let card = if consent::config().enabled {

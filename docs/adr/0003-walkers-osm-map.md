@@ -1,6 +1,6 @@
 # 0003 — walkers + OpenStreetMap tiles
 
-Status: accepted (2026-09-25)
+Status: accepted (2026-09-25). Production tiles: see 0024 (Mapbox).
 
 ## Context
 egui has no built-in map.

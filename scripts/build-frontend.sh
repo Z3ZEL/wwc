@@ -4,6 +4,7 @@
 #   WWC_API_URL  public PocketBase URL, baked into the wasm (required)
 #   PUBLIC_URL   path the site is served under (default /)
 #   WWC_BUILD_ID cache key of the files generated at build time (default: the UTC build time)
+#   WWC_MAPBOX_TOKEN optional: Mapbox public token (pk.…), Outdoors + Aerial map layers (ADR 0024); unset = OpenStreetMap tiles
 #   WWC_UMAMI_WEBSITE_ID optional: Umami Cloud website id, enables analytics behind the consent panel (ADR 0022)
 #   WWC_UMAMI_SCRIPT_URL optional: Umami tracker URL (default https://cloud.umami.is/script.js)
 #   GITHUB_TOKEN optional, read-only: lifts GitHub's rate limit for the release notes (tools/changelog-gen)

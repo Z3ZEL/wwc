@@ -28,6 +28,18 @@ pub fn umami_script_url() -> &'static str {
     }
 }
 
+/// Mapbox public token from `WWC_MAPBOX_TOKEN` (ADR 0024): Mapbox tiles and the layer button.
+/// `None` (unset or not a public token) keeps OpenStreetMap's tiles.
+pub fn mapbox_token() -> Option<&'static str> {
+    public_token(option_env!("WWC_MAPBOX_TOKEN"))
+}
+
+/// Only `pk.…`: the wasm shows the token to anyone, so a secret `sk.…` one is refused. It goes
+/// into tile URLs too: `url_safe_or_dev` answers `dev` for anything else.
+fn public_token(token: Option<&str>) -> Option<&str> {
+    Some(url_safe_or_dev(token)).filter(|t| t.len() > 3 && t.starts_with("pk."))
+}
+
 fn trim_base(url: &str) -> &str {
     url.trim().trim_end_matches('/')
 }
@@ -85,5 +97,13 @@ mod tests {
         assert_eq!(uuid_or_none(Some("94db1cb1-74f4-4a40-ad6c-96236267040")), None, "too short");
         assert_eq!(uuid_or_none(Some("94db1cb1-74f4-4a40-ad6c-96236267040\"")), None);
         assert!(umami_script_url().starts_with("https://"));
+    }
+
+    #[test]
+    fn mapbox_tokens_are_public() {
+        assert_eq!(public_token(Some(" pk.eyJ1Ijoi.x-Y_z ")), Some("pk.eyJ1Ijoi.x-Y_z"));
+        for refused in [None, Some(""), Some("pk."), Some("sk.eyJ1Ijoi.secret"), Some("pk.a&b=c")] {
+            assert_eq!(public_token(refused), None, "{refused:?}");
+        }
     }
 }

@@ -98,6 +98,7 @@ impl Controller {
                 }
             }
             Action::CheckLocationPermission => self.check_location_permission(),
+            Action::ToggleAerial => state.aerial = !state.aerial,
 
             Action::Search => {
                 let query = clean_search(&state.search.query);

@@ -30,7 +30,7 @@
       "title": "Privacy Policy",
       "short_title": "Privacy",
       "file": "privacy.md",
-      "updated": "2026-10-11",
+      "updated": "2026-10-25",
       "footer": true
     },
     {
@@ -45,7 +45,7 @@
       "id": "credits",
       "title": "Credits and licenses",
       "file": "credits.md",
-      "updated": "2026-09-29"
+      "updated": "2026-10-25"
     },
     {
       "id": "welcome",

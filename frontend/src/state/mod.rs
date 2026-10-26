@@ -224,6 +224,8 @@ pub struct AppState {
     pub map_focus: Option<(f64, f64)>,
     /// The visitor's position from the "Locate me" button (memory only, never saved).
     pub locate: Locate,
+    /// Mapbox builds: aerial imagery instead of the outdoor map (layer button, memory only).
+    pub aerial: bool,
 
     pub detail: Option<CampsiteDetail>,
 

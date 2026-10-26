@@ -1,10 +1,12 @@
 //! "Locate me" button at the bottom-right of the map, above the footer: centers the map on the
 //! visitor and shows where they are (ARCHITECTURE §5.5, ADR 0019). The controller asks the
-//! browser for the position; this only draws the button.
+//! browser for the position; this only draws the button. Mapbox builds also get the layer
+//! button right above it (ADR 0024).
 
-use egui::{Align2, Area, Button, Color32, Id, Order, Pos2, Rangef, Rect, Stroke, Ui, Vec2};
+use egui::{Align2, Area, Button, Color32, Id, Order, Pos2, Rangef, Rect, RichText, Stroke, TextStyle, Ui, Vec2};
 
 use crate::actions::Action;
+use crate::config;
 use crate::state::AppState;
 use crate::ui::theme::Theme;
 use crate::ui::widgets::{Spinner, SpinnerSize};
@@ -43,6 +45,15 @@ pub fn show(
         .fixed_pos(Pos2::new(right, bottom - margin))
         .constrain_to(area)
         .show(ctx, |ui| {
+            // The icon is the layer a click shows.
+            if config::mapbox_token().is_some() {
+                let (icon, hint) =
+                    if state.aerial { ("🗺", "Show the outdoor map") } else { ("🌍", "Show aerial imagery") };
+                let layer = Button::new(RichText::new(icon).text_style(TextStyle::Heading)).min_size(Vec2::splat(size));
+                if ui.add(layer).on_hover_text(hint).clicked() {
+                    actions.push(Action::ToggleAerial);
+                }
+            }
             let pending = state.locate.pending;
             let response = ui
                 .add_enabled(!pending, Button::new("").min_size(Vec2::splat(size)))

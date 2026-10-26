@@ -33,7 +33,7 @@ Product decisions (v0.2):
 | --------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Frontend        | **Rust + egui/eframe**, compiled to **WebAssembly** (`wasm32-unknown-unknown`) | **Web only.** No native desktop target is supported or tested.                                                   |
 | Frontend build  | **Trunk**                                                                      | Dev server, asset pipeline, dev proxy to the backend, `wasm-opt` in release                                      |
-| Map widget      | **`walkers`** crate (egui slippy map)                                          | OpenStreetMap raster tiles in dev                                                                                |
+| Map widget      | **`walkers`** crate (egui slippy map)                                          | Mapbox raster tiles (Outdoors + Aerial) with `WWC_MAPBOX_TOKEN`, OpenStreetMap tiles without (dev, ADR 0024)     |
 | HTTP (wasm)     | **`ehttp`** (callback based, no async runtime)                                 | One API client module, see §5.4                                                                                  |
 | Backend         | **PocketBase** (single binary, SQLite)                                         | Auth, REST API, file storage, access rules, admin UI                                                             |
 | Backend logic   | PocketBase **JS migrations** (`pb_migrations/`) and **JS hooks** (`pb_hooks/`) | No custom Go build unless an ADR justifies it                                                                    |
@@ -46,7 +46,7 @@ Product decisions (v0.2):
 │   ├─ UI (screens / widgets)  ──► Actions                           │
 │   ├─ Controller (update loop) ──► ApiClient ──┐                    │
 │   └─ AppState  ◄── Events (channel) ◄─────────┘                    │
-│   Map tiles ◄──── OSM tile server (HTTP)                           │
+│   Map tiles ◄──── Mapbox (or OSM without a token) (HTTP)           │
 └─────────────────────────────┬─────────────────────────────────────┘
                               │ dev: same origin, /api/* (Trunk proxy) · prod: WWC_API_URL + CORS
                               ▼
@@ -89,7 +89,7 @@ wwc/
 │       ├── main.rs            # wasm entry: start eframe WebRunner
 │       ├── lib.rs             # module tree; `app` and `map` are wasm-only
 │       ├── app.rs             # impl eframe::App — frame loop + session persistence
-│       ├── config.rs          # build-time config (WWC_API_URL, WWC_BUILD_ID, WWC_UMAMI_*)
+│       ├── config.rs          # build-time config (WWC_API_URL, WWC_BUILD_ID, WWC_UMAMI_*, WWC_MAPBOX_TOKEN)
 │       ├── actions.rs         # Action (UI intent) + Event (API result) enums
 │       ├── controller.rs      # Action -> state change / API request
 │       ├── state/             # AppState, Panel, Remote, form drafts, pure `apply(event)` + tests
@@ -105,10 +105,10 @@ wwc/
 │       └── ui/
 │           ├── theme.rs       # Theme struct (serde) + apply to egui::Style
 │           ├── top_bar.rs
-│           ├── footer.rs      # map footer: legal links + OSM attribution
+│           ├── footer.rs      # map footer: legal links + map attribution (Mapbox wordmark + links, or OSM)
 │           ├── notice.rs      # privacy notice at the bottom of the map
 │           ├── consent_panel.rs # consent panel (replaces the notice once consent is enabled)
-│           ├── locate_button.rs # "Locate me" button at the bottom-right of the map
+│           ├── locate_button.rs # "Locate me" button at the bottom-right of the map, and the layer button above it (Mapbox builds)
 │           ├── welcome_card.rs  # welcome card at the top-left of the map: Welcome + Updates tabs
 │           ├── photo_viewer.rs  # full-page photo carousel (modal); photo_zoom.rs: its zoom/pan geometry (host-tested)
 │           ├── panels/        # auth (login/register), profile, campsite_form, campsite_view, search, filters, document
@@ -314,7 +314,7 @@ Rules:
 
 ### 5.3 State shape (starting point)
 
-See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `locate` (the "Locate me" request and the last position found, memory only), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `welcome` (the welcome card's open tab and collapsed state, memory only) + `changelog` (the release notes, fetched the first time the Updates tab is shown), `toasts`.
+See `frontend/src/state/mod.rs`: `session`, `panel` + `panel_collapsed`, `confirm_discard` (unsaved-changes prompt), `after_login` (panel to return to), `campsite_count`, `tags`, `viewport` + `markers` (with a generation counter), `filters` (global map filters), `search` (query buffer, submitted query, results + generation), `map_focus` (a position the map centers on next frame), `locate` (the "Locate me" request and the last position found, memory only), `aerial` (the layer button's choice, memory only), `detail` (the open campsite: data, stats, my rating, paginated comments), one draft per form, `documents` (fetched documents, parsed, by id) + `document_back` (where the Document panel was opened from), `notice_seen` (the Privacy Policy version the privacy notice was dismissed for), `consent` + `consent_panel` (the visitor's consent choice and the panel's buffers, §5.12), `welcome` (the welcome card's open tab and collapsed state, memory only) + `changelog` (the release notes, fetched the first time the Updates tab is shown), `toasts`.
 The walkers tile cache and map memory are not in `AppState`; they live in `map::MapView`, owned by the app.
 
 - **Routing (not implemented yet — panel state is in memory only):** there is one page (the map). The "route" is the active side panel. Sync `panel` with the URL hash so links are shareable and back/forward work: `#/` (none), `#/login`, `#/register`, `#/profile`, `#/new`, `#/campsite/<id>`, `#/campsite/<id>/edit`, `#/moderation`. Read the hash on startup. Unknown hash → `#/`. An auth-only panel opened while logged out → login panel, then back to the requested panel after login.
@@ -332,12 +332,13 @@ The walkers tile cache and map memory are not in `AppState`; they live in `map::
 
 ### 5.5 Map (`map/`)
 
-- Use `walkers` with an OSM tile source in dev. Always render **tile attribution** ("© OpenStreetMap contributors"): it is in the map footer (`ui/footer.rs`, §5.6), next to the legal links.
-- The public OSM tile server has a strict usage policy: fine for dev, **not for production** — switching provider is a config change in `map/`, nothing else.
+- **Tiles (ADR 0024):** builds with a Mapbox public token (`WWC_MAPBOX_TOKEN`, `config::mapbox_token`, `pk.…` only) use walkers' `Mapbox` source (512 px tiles, @2x on screens with more than one pixel per point) with two layers: **Outdoors** (the default) and **Aerial** (`SatelliteStreets`). `map/view.rs` keeps one walkers `HttpTiles` per layer. Builds without a token (dev, forks) use the public OSM tile server, one layer, no layer button: its usage policy makes it fine for dev, **not for production**.
+- Always render the **tile attribution**: it is in the map footer (`ui/footer.rs`, §5.6), next to the legal links. Mapbox: its wordmark (`assets/map/mapbox-logo.svg`, as tall as body text), "© Mapbox", "© OpenStreetMap", "© Maxar" on the aerial layer, and "Improve this map", each a link. OSM: "© OpenStreetMap contributors".
 - Markers are painted in the `Map::show` closure (`map/view.rs`); clicking one emits `Action::OpenPanel(Panel::Campsite(id))`. Markers are colored by state: normal, your own, selected.
 - **Clustering** (`map/cluster.rs`): below `map.cluster_max_zoom`, markers closer than `map.cluster_distance` points on screen are drawn as one circle with a count (radius `cluster_radius`…`cluster_radius_max`). Clicking a cluster centers on it and zooms in by `cluster_zoom_step`. The selected campsite is always drawn alone. The grouping only uses relative screen positions, so panning doesn't change it.
 - `AppState.map_focus`: set by `Action::FocusCampsite` (a search result click). The map takes it on its next frame, centers there and zooms in to at least `map.focus_zoom`.
 - Controls: the mouse wheel zooms around the pointer (no Ctrl needed, walkers `zoom_with_ctrl(false)`), dragging pans, pinch zooms on touch, double-click zooms in, and +/− buttons (`map.zoom_button_size`, `zoom_button_gap`) sit at the top of the map, right of the welcome card (§5.6), or in the top-left corner while the card is hidden. The map is drawn before the card, so they follow its rect from the previous frame, and the app repaints when it moves. The wheel no longer pans, so a touchpad two-finger swipe zooms too. The cursor is a grab hand over the map, a closed hand while dragging, and a pointer over markers.
+- **Layer button** (ADR 0024): Mapbox builds only. A square button (`layout.map_button_size`) right above "Locate me", in the same `Area` (`ui/locate_button.rs`), so it moves with it. Its icon is the layer a click shows (🗺 outdoor map, 🌍 aerial imagery). A click emits `Action::ToggleAerial`; the choice is `AppState.aerial`, memory only (every visit opens on Outdoors).
 - **Locate me** (`ui/locate_button.rs`, ADR 0019): a square button (`layout.map_button_size`) in the bottom-right corner of the map, `spacing.map_button_margin` above the footer, and above the privacy notice or consent panel when they would overlap (phones). A click emits `Action::Locate`: the controller asks the browser for one position (`web::locate`, `getCurrentPosition`; the browser asks for permission the first time) and the answer comes back as `Event::Located`. A themed spinner replaces the icon while waiting. A position centers the map (`map_focus`, zoom at least `focus_zoom`) and is drawn under the campsites as a dot (`map.my_location_radius`, `map.colors.my_location`) inside its accuracy circle (`my_location_accuracy`). A failure (denied, unavailable, timeout, no API or no HTTPS) shows an error toast and removes the dot. **On page load**, `Action::CheckLocationPermission` asks the Permissions API, which never prompts, and locates automatically only if access is already `granted`. A failure of that automatic request is silent. The position is never sent to the server or saved.
 - When the viewport settles (debounce ~300 ms after pan/zoom stops), emit `Action::ViewportChanged(bbox)`, which triggers the bbox query (§4.4).
 - "Add campsite" flow: the "New campsite" panel is open, the map stays interactive, and clicking the map places or moves a draft pin that fills the form's lat/lng. Opening a fresh form shows an info toast: "Tip: click on the map to place your campsite." The panel shows the coordinates plus a "Use map center" button.
@@ -401,7 +402,7 @@ Behavior:
 - Clickable widgets show a pointer cursor: every `Button` through `Visuals::interact_cursor` (set in `Theme::apply`), and custom widgets, radios and sliders set it themselves.
 - Errors appear as toasts at the bottom-left of the map area, or inline in forms. Long toast messages wrap, and a toast is never wider than the window.
 
-**Map footer** (`ui/footer.rs`): a small strip at the bottom-right of the map (an egui `Area` constrained to the map rect, so it follows the docked panel's edge): the short titles of the documents marked `footer` in `documents.json` (Terms · Privacy · Legal notice), "Privacy choices" once consent is enabled (§5.12), then "© OpenStreetMap contributors". Documents open in the Document panel; the attribution opens openstreetmap.org/copyright in a new tab. Colors `map.colors.attribution_*`, padding `spacing.map_footer_padding`. Hidden while a panel covers the whole map (narrow screens).
+**Map footer** (`ui/footer.rs`): a small strip at the bottom-right of the map (an egui `Area` constrained to the map rect, so it follows the docked panel's edge): the short titles of the documents marked `footer` in `documents.json` (Terms · Privacy · Legal notice), "Privacy choices" once consent is enabled (§5.12), then the map attribution (§5.5): the Mapbox wordmark first and Mapbox's links, or "© OpenStreetMap contributors" without a Mapbox token. Documents open in the Document panel; attribution links open in a new tab. Colors `map.colors.attribution_*`, padding `spacing.map_footer_padding`. Hidden while a panel covers the whole map (narrow screens).
 
 **Privacy notice** (`ui/notice.rs`): a card at the bottom-center of the map, above the footer, until the user clicks "Got it" (§5.11).
 
@@ -472,7 +473,7 @@ Long texts shown in the app are Markdown files in `frontend/assets/documents/`, 
 
 **Legal features** (EU operator: GDPR, ePrivacy, DSA):
 
-- **Map footer** (§5.6): Terms · Privacy · Legal notice · © OpenStreetMap contributors, whenever the map is visible.
+- **Map footer** (§5.6): Terms · Privacy · Legal notice · the map attribution (Mapbox or OpenStreetMap), whenever the map is visible.
 - **Sign-up:** a required checkbox "I am at least `min_age` years old and I accept the Terms of Use" (`RegisterForm::accepted_terms`, checked by `RegisterForm::validate`), and a line pointing to the Privacy Policy. The policy is information, not something to accept: the account's legal basis is the contract. **Browser-side only**: the backend doesn't record the acceptance yet (§13).
 - **Privacy notice** (`ui/notice.rs`): informative, **not a consent banner**. Shown only in builds without analytics (no Umami website id, §5.12): they store only strictly necessary data (§5.3 Persistence) and load no trackers, so there is nothing to consent to. "Got it" stores the Privacy Policy's `updated` date in `notice_seen` (`wwc_notice`); when that date changes, the notice comes back as "Our Privacy Policy changed on …". Builds with analytics show the consent panel instead (§5.12).
 - **Profile → "Your data"** points to the Privacy Policy: export and deletion are requested by email until they are self-service.
@@ -502,7 +503,7 @@ A consent panel for optional processing (analytics and any other non-essential s
 | **Security**    | Authorization only in PocketBase rules. Escape user input in filters. File fields restricted to image MIME types and size limits. Comments rendered as plain text (egui doesn't render HTML — keep it that way).                                                                                                                              |
 | **Privacy**     | Never expose user emails publicly. Campsite coordinates are public by design, as the campsite form says. What is collected, public and stored is described in the Privacy Policy: keep it in sync (§5.11).                                                                                                                                    |
 | **Performance** | Bbox queries + field selection + pagination. Thumbnails via PocketBase's `?thumb=WxH` on file URLs — declare thumb sizes on the field. Release builds use `opt-level = "z"` or `"s"`, `lto = true`, and `wasm-opt`.                                                                                                                           |
-| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default) and `WWC_BUILD_ID` (cache key of `releases.json`; `scripts/build-frontend.sh` sets the build time, `dev` when unset), `WWC_UMAMI_WEBSITE_ID` (optional: analytics and the consent panel, §5.12) and `WWC_UMAMI_SCRIPT_URL` (optional). Build only: `GITHUB_TOKEN` (optional, read-only) and `WWC_CHANGELOG` for `tools/changelog-gen`. Tiles are still the public OSM server. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
+| **Config**      | Frontend: `frontend/src/config.rs`, baked in at build time — `WWC_API_URL` (PocketBase URL; unset = same origin, the docker-compose default) and `WWC_BUILD_ID` (cache key of `releases.json`; `scripts/build-frontend.sh` sets the build time, `dev` when unset), `WWC_UMAMI_WEBSITE_ID` (optional: analytics and the consent panel, §5.12), `WWC_UMAMI_SCRIPT_URL` (optional) and `WWC_MAPBOX_TOKEN` (optional Mapbox public token: Mapbox tiles and the layer button, §5.5; unset = the public OSM tile server). Build only: `GITHUB_TOKEN` (optional, read-only) and `WWC_CHANGELOG` for `tools/changelog-gen`. Backend: env vars applied at boot by `pb_hooks/settings.pb.js` and `entrypoint.sh` (full list in `.env.example`).                                        |
 | **Time**        | Store UTC (PocketBase does); format in local time in the UI.                                                                                                                                                                                                                                                                                  |
 
 ---
@@ -561,7 +562,7 @@ Conventions:
 | Unit (Rust)   | `state::apply`, controller logic, filter building/escaping, DTO (de)serialization against recorded PocketBase JSON fixtures                                                                                                                                                                      | `cargo test` on the host (pure logic, no wasm needed)                                                        |
 | Wasm          | Anything touching `web-sys` (currently only `main.rs`)                                                                                                                                                                                                                                           | `wasm-bindgen-test` (headless browser), only where needed                                                    |
 | Backend rules | Every API rule: anon/user/owner/other-user/admin cases for list/view/create/update/delete. Must include: rating or commenting on your own campsite is rejected; a user can't set `role`/`hidden`/`status`; hidden content is invisible to others; non-admins can't list reports they didn't file | Script (e.g. shell + curl or a small Rust integration test) against the dockerized PocketBase with seed data |
-| Manual smoke  | Map loads, markers appear, login, create campsite with photos (add, remove, 3/3 limit, bad type/size, uploaded file has no EXIF/GPS and is ≤ 2048 px, a sideways-EXIF photo shows upright), browse them in the viewer (arrows, keys, thumbnails, Esc/backdrop close), rate, comment, narrow width                                                                                     | Checklist in the PR                                                                                          |
+| Manual smoke  | Map loads, markers appear, login, create campsite with photos (add, remove, 3/3 limit, bad type/size, uploaded file has no EXIF/GPS and is ≤ 2048 px, a sideways-EXIF photo shows upright), browse them in the viewer (arrows, keys, thumbnails, Esc/backdrop close), rate, comment, switch the map layer (Mapbox build), narrow width                                                | Checklist in the PR                                                                                          |
 
 **A change to an API rule without a corresponding rule test is incomplete.**
 
@@ -592,7 +593,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 
 - 0001 — egui/wasm web-only frontend (accepted trade-off: canvas rendering, limited a11y/SEO).
 - 0002 — PocketBase as backend; rules as the authorization layer; JS hooks over custom Go build.
-- 0003 — `walkers` + OSM tiles for the map in dev.
+- 0003 — `walkers` + OSM tiles for the map in dev (production tiles: ADR 0024).
 - 0004 — Viewport bbox querying instead of loading all campsites.
 - 0005 — Product rules: owner-only editing, no rating or commenting on your own campsite, exact locations public.
 - 0006 — Moderation: user reports + admin review; `hidden` flag instead of deletion; admin = `users.role`.
@@ -613,6 +614,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - 0021 — Welcome card at the top-left of the map (Welcome text + Updates), zoom buttons on its right, nothing saved; release notes synced from GitHub Releases at build time (`tools/changelog-gen` → `releases.json`), never fetched from GitHub by visitors.
 - 0022 — Audience measurement with Umami Cloud (free tier), only with consent: script loaded after "Accept", custom events from Rust, no personal data in events, off in builds without a website id.
 - 0023 — Test instances seed the dev data on every boot (`WWC_SEED=1`, background step in the entrypoint once PocketBase answers); the seed's tools are added to the image only by the build arg of the same name; rate limits off through `PB_SETTINGS_FILE`.
+- 0024 — Mapbox tiles with a build-time public token (`WWC_MAPBOX_TOKEN`): Outdoors by default, Aerial with a layer button above "Locate me", choice kept in memory; Mapbox wordmark and links in the map footer; OSM tiles and no layer button without a token.
 
 ---
 
@@ -639,6 +641,7 @@ Significant decisions are recorded in `docs/adr/NNNN-title.md` (Context → Deci
 - Legal pages (Terms of Use, Privacy Policy, Legal Notice, Credits) as Markdown documents shown in a side panel, map footer links, sign-up age + Terms checkbox, privacy notice (§5.11, ADR 0016). The operator's details in `documents.json` are still placeholders.
 - Audience measurement with Umami Cloud behind the consent panel (§5.12, ADR 0022), in builds with `WWC_UMAMI_WEBSITE_ID`.
 - "Locate me" button: centers the map on the visitor and shows their position (§5.5, ADR 0019).
+- Mapbox map background in builds with `WWC_MAPBOX_TOKEN`: Outdoors by default, aerial imagery with the layer button above "Locate me" (§5.5, ADR 0024).
 - "Forgot password?" on the Login panel: a reset link by email, then PocketBase's own page sets the new password (§4.6, ADR 0020).
 - Welcome card at the top-left of the map: a welcome text and the latest release notes, synced from GitHub Releases at build time (§5.6, ADR 0021).
 

@@ -37,6 +37,8 @@ pub enum Action {
     Locate,
     /// Page load: locate at once if the visitor already allowed it, without asking.
     CheckLocationPermission,
+    /// Layer button (Mapbox builds): switch between the outdoor map and aerial imagery.
+    ToggleAerial,
 
     /// Run the query typed in the top bar search field.
     Search,
